@@ -1,15 +1,43 @@
+/**************************************************
+*
+*   HEADER NAME:
+*       hashmap.h
+*
+*   DESCRIPTION:
+*       Provides a public interface for hashmap
+*       functionality.
+*
+**************************************************/
+
+#ifndef __HASHMAP_H__
+#define __HASHMAP_H__
+
+/*-------------------------------------------------
+PROJECT INCLUDES
+-------------------------------------------------*/
 #include "types.h"
 
-typedef key_t8 char *;
+/*-------------------------------------------------
+                      CONSTANTS
+-------------------------------------------------*/
 typedef map_error_code_t8 sint8; 
 enum
 {
-    ERR_NO_ERROR  =  0
-    ERR_NO_MEMORY = -1,
-    ERR_NULL_REF  = -2
+    ERR_NO_ERROR  =  0,     /* "no error" identifier    */
+    ERR_NO_MEMORY = -1,     /* "out of memory" error    */
+    ERR_NULL_REF  = -2      /* "null reference" error   */
 };
 
+/*-------------------------------------------------
+                        TYPES
+-------------------------------------------------*/
+
+typedef key_t8 char *;
 struct map;
+
+/*-------------------------------------------------
+                FUNCTION PROTOTYPES
+-------------------------------------------------*/
 
 struct map *create_map
 (
@@ -50,3 +78,5 @@ void free_map
 (
     struct map *m       /* map to free          */
 );
+
+#endif  /* __HASHMAP_H__ */
