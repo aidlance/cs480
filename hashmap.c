@@ -14,6 +14,7 @@
 -------------------------------------------------*/
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "hashmap.h"
@@ -24,7 +25,7 @@
 -------------------------------------------------*/
 #define __INITIAL_SIZE 512
 
-typedef __map_type_t8 uint8;
+typedef uint8 __map_type_t8;
 enum
 {
     __MAP_TYPE_STATIC,      /* static map identifier    */
@@ -40,7 +41,7 @@ struct __map_element
     key_t8      key;        /* element's key data       */
     void       *val;        /* element's value data     */
     int         size;       /* val's size in bytes      */
-    struct __map_element    
+    struct __map_element
                *next;       /* pointer to next element  */
 };  /* __map_element */
 
@@ -50,7 +51,7 @@ struct map
     uint32      capacity;   /* maximum size of the table*/
     __map_type_t8
                 map_type;   /* type of map              */
-    struct __map_element 
+    struct __map_element
               **table;      /* the table                */
 };  /* map */
 
@@ -59,40 +60,26 @@ struct map
 -------------------------------------------------*/
 
 /*-------------------------------------
-Static lookup table.
-
-Used when hashing the key to an index.
--------------------------------------*/
-static float sin_table[ __NUM_CHARACTERS ] = 
-{
-    (float)sin(  1.0f ), (float)sin(  2.0f ), (float)sin(  3.0f ), (float)sin(  4.0f ), (float)sin(  5.0f ),
-    (float)sin(  6.0f ), (float)sin(  7.0f ), (float)sin(  8.0f ), (float)sin(  9.0f ), (float)sin( 10.0f ),
-    (float)sin( 11.0f ), (float)sin( 12.0f ), (float)sin( 13.0f ), (float)sin( 14.0f ), (float)sin( 15.0f ),
-    (float)sin( 16.0f ), (float)sin( 17.0f ), (float)sin( 18.0f ), (float)sin( 19.0f ), (float)sin( 20.0f ),
-    (float)sin( 21.0f ), (float)sin( 22.0f ), (float)sin( 23.0f ), (float)sin( 24.0f ), (float)sin( 25.0f ),
-    (float)sin( 26.0f ), (float)sin( 27.0f ), (float)sin( 28.0f ), (float)sin( 29.0f ), (float)sin( 30.0f ),
-    (float)sin( 31.0f ), (float)sin( 32.0f ), (float)sin( 33.0f ), (float)sin( 34.0f ), (float)sin( 35.0f ),
-    (float)sin( 36.0f ), (float)sin( 37.0f ), (float)sin( 23.0f ), (float)sin( 39.0f ), (float)sin( 40.0f ),
-    (float)sin( 41.0f ), (float)sin( 42.0f ), (float)sin( 43.0f ), (float)sin( 44.0f ), (float)sin( 45.0f ),
-    (float)sin( 46.0f ), (float)sin( 47.0f ), (float)sin( 48.0f ), (float)sin( 49.0f ), (float)sin( 50.0f ),
-    (float)sin( 51.0f ), (float)sin( 52.0f ), (float)sin( 53.0f ), (float)sin( 54.0f ), (float)sin( 55.0f ),
-    (float)sin( 56.0f ), (float)sin( 57.0f ), (float)sin( 58.0f ), (float)sin( 59.0f ), (float)sin( 60.0f ),
-    (float)sin( 61.0f ), (float)sin( 62.0f ), (float)sin( 63.0f )
-};
-
-/*-------------------------------------
 Index definitions corresponding to
-indices of the above static lookup
-table.
+indices of the static lookup
+table below.
 -------------------------------------*/
 enum
 {
     __LOWER_INDEX    = 0,       /* start index of lowercase letters in sin_table    */
     __UPPER_INDEX    = 26,      /* start index of uppercase letters in sin_table    */
     __NUMBER_INDEX   = 52,      /* start index of numbers in sin_table              */
-    __MISC_INDEX     = 62,      /* index of the misceleaneous sin_table element     */
+    __MISC_INDEX     = 62,      /* index of the miscellaneous sin_table element     */
     __NUM_CHARACTERS = 63       /* number of elements in sin_table                  */
 };
+
+/*-------------------------------------
+Static lookup table.
+
+Used when hashing the key to an index.
+-------------------------------------*/
+static float sin_table[ __NUM_CHARACTERS ];
+static boolean table_initialized = FALSE;
 
 /*-------------------------------------------------
                       MACROS
@@ -100,7 +87,7 @@ enum
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __ptr_to_handle - "Pointer to handle"
 *
 *   DESCRIPTION:
@@ -113,13 +100,13 @@ enum
 *
 **************************************************/
 inline uint32 __ptr_to_handle
-( 
-    void       *ptr     /* pointer              */ 
+(
+    void       *ptr     /* pointer              */
 )
 {
     return( (uint32)ptr );
-    
-}   /* ptr_to_handle() */
+
+}   /* __ptr_to_handle() */
 
 /*-------------------------------------------------
             PRIVATE FUNCTION PROTOTYPES
@@ -137,27 +124,27 @@ void __free_element_data
 
 void __free_table
 (
-    struct __map_element 
-              **t       /* the table we're freeing  */   
-    uint32      cap;    /* capacity of the table    */
+    struct __map_element
+              **t,      /* the table we're freeing  */
+    uint32      cap     /* capacity of the table    */
 );
 
 struct __map_element *__get_element
-( 
+(
     struct map *m,      /* map              */
     key_t8      key     /* key to grab      */
 );
 
 uint32 __hash_key
-( 
-    key_t8      key,    /* the key to hash      */  
+(
+    key_t8      key,    /* the key to hash      */
     uint32      n       /* number of elements   */
                         /*  in the hash table   */
 );
 
 map_error_code_t8 __init_element
 (
-    struct __map_element 
+    struct __map_element
                *e,      /* element to initialize    */
     key_t8      key,    /* element's key            */
     void       *val,    /* element's value data     */
@@ -172,19 +159,24 @@ map_error_code_t8 __init_map
                 type    /* type of map to init  */
 );
 
+void __init_sin_table
+(
+    void
+);
+
 boolean __is_lower
-( 
-    char        test    /* character to test    */ 
+(
+    char        test    /* character to test    */
 );
 
 boolean __is_number
-( 
-    char        test    /* character to test    */ 
+(
+    char        test    /* character to test    */
 );
 
 boolean __is_upper
-( 
-    char        test    /* character to test    */ 
+(
+    char        test    /* character to test    */
 );
 
 map_error_code_t8 __resize_map
@@ -200,7 +192,7 @@ map_error_code_t8 __resize_map
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __create_element - "Create Element"
 *
 *   DESCRIPTION:
@@ -209,7 +201,7 @@ map_error_code_t8 __resize_map
 *
 *   RETURNS:
 *       Returns a pointer to a map element.
-*   
+*
 *   ERRORS:
 *       * If this function was unable to allocate
 *         memory for the new element, then this
@@ -222,13 +214,13 @@ struct __map_element *__create_element
 )
 {
     return( (struct __map_element *)malloc( sizeof( struct __map_element ) ) );
-    
+
 }   /* __create_element() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __free_element_data - "Free Element Data"
 *
 *   DESCRIPTION:
@@ -245,21 +237,21 @@ void __free_element_data
         free( e->key );
         e->key = NULL;
     }
-    
+
     if( e->val != NULL )
     {
         free( e->val );
         e->val = NULL;
     }
-    
+
     e->size = 0;
-    
+
 }   /* __free_element_data() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __free_table - "Free Table"
 *
 *   DESCRIPTION:
@@ -268,9 +260,9 @@ void __free_element_data
 **************************************************/
 void __free_table
 (
-    struct __map_element 
-              **t       /* the table we're freeing  */   
-    uint32      cap;    /* capacity of the table    */
+    struct __map_element
+              **t,      /* the table we're freeing  */
+    uint32      cap     /* capacity of the table    */
 )
 {
     /*---------------------------------
@@ -279,7 +271,7 @@ void __free_table
     uint32                i;    /* for-loop iterator            */
     struct __map_element *cur;  /* pointer to current element   */
     struct __map_element *next; /* pointer to next element      */
-    
+
     for( i = 0; i < cap; ++i )
     {
         cur = t[ i ];
@@ -292,24 +284,24 @@ void __free_table
         }
     }
     free( t );
-    
+
 }   /* __free_table() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __get_element - "Get Map Element"
 *
 *   DESCRIPTION:
-*       This function returns a pointer to a 
+*       This function returns a pointer to a
 *       map element if its key matches the
 *       supplied key. If no such element exists,
 *       then this function returns NULL.
 *
 **************************************************/
 struct __map_element *__get_element
-( 
+(
     struct map *m,      /* map              */
     key_t8      key     /* key to grab      */
 )
@@ -319,7 +311,7 @@ struct __map_element *__get_element
     ---------------------------------*/
     int                     idx;    /* hashed key index     */
     struct __map_element   *cur;    /* current element      */
-    
+
     /*---------------------------------
     Check for a valid map reference
     ---------------------------------*/
@@ -327,15 +319,15 @@ struct __map_element *__get_element
     {
         return( NULL );
     }
-    
+
     /*---------------------------------
     Hash the key to an index
     ---------------------------------*/
     idx = __hash_key( key, m->capacity );
     cur = m->table[ idx ];
-    
+
     /*---------------------------------
-    Return the value of the element 
+    Return the value of the element
     whose key matches the supplied
     key.
     ---------------------------------*/
@@ -347,15 +339,15 @@ struct __map_element *__get_element
         }
         cur = cur->next;
     }
-    
+
     return( NULL );
-    
+
 }   /* __get_element() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __hash_key - "Hash Key"
 *
 *   DESCRIPTION:
@@ -368,8 +360,8 @@ struct __map_element *__get_element
 *
 **************************************************/
 uint32 __hash_key
-( 
-    key_t8      key,    /* the key to hash      */  
+(
+    key_t8      key,    /* the key to hash      */
     uint32      n       /* number of elements   */
                         /*  in the hash table   */
 )
@@ -380,7 +372,7 @@ uint32 __hash_key
     key_t8      ptr;    /* character in key     */
     float       tot;    /* accumulator          */
     uint32      idx;    /* index for an array   */
-    
+
     ptr = key;
     while( *ptr != '\0' )
     {
@@ -400,20 +392,20 @@ uint32 __hash_key
         {
             idx = __MISC_INDEX;
         }
-        
+
         tot += sin_table[ idx ];
         ++ptr;
     }
-        
+
     tot *= (float)n;
     return( ( (uint32)tot ) % n );
-    
+
 }   /* __hash_str() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __init_element - "Initialize Element"
 *
 *   DESCRIPTION:
@@ -422,9 +414,9 @@ uint32 __hash_key
 *
 *   RETURNS:
 *       Returns an error code
-*   
+*
 *   ERRORS:
-*       * ERR_NULL_REF is returned if the 
+*       * ERR_NULL_REF is returned if the
 *         element hasn't been created yet (i.e.
 *         it is equal to NULL).
 *       * ERR_NO_MEMORY is returned if this
@@ -436,7 +428,7 @@ uint32 __hash_key
 **************************************************/
 map_error_code_t8 __init_element
 (
-    struct __map_element 
+    struct __map_element
                *e,      /* element to initialize    */
     key_t8      key,    /* element's key            */
     void       *val,    /* element's value data     */
@@ -446,8 +438,8 @@ map_error_code_t8 __init_element
     /*---------------------------------
     Local variables
     ---------------------------------*/
-    uint32  len = strlen( key );
-    
+    uint32  len = strlen( key ) + 1;
+
     /*---------------------------------
     Make sure that our element is
     valid
@@ -456,7 +448,7 @@ map_error_code_t8 __init_element
     {
         return( ERR_NULL_REF );
     }
-    
+
     /*---------------------------------
     Allocate space for the key
     and copy the data over
@@ -467,7 +459,7 @@ map_error_code_t8 __init_element
         return( ERR_NO_MEMORY );
     }
     memcpy( (void *)e->key, (void *)key, len );
-    
+
     /*---------------------------------
     Allocate space for the value
     and copy the data over
@@ -478,18 +470,18 @@ map_error_code_t8 __init_element
         return( ERR_NO_MEMORY );
     }
     memcpy( (void *)e->val, (void *)val, size );
-    
+
     e->size = size;
     e->next = NULL;
-    
+
     return( ERR_NO_ERROR );
-    
+
 }   /* __init_element() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __init_map - "Initialize Map"
 *
 *   DESCRIPTION:
@@ -497,9 +489,9 @@ map_error_code_t8 __init_element
 *
 *   RETURNS:
 *       Returns an error code
-*   
+*
 *   ERRORS:
-*       * ERR_NULL_REF is returned if the 
+*       * ERR_NULL_REF is returned if the
 *         map hasn't been created yet (i.e.
 *         it is equal to NULL).
 *       * ERR_NO_MEMORY is returned if this
@@ -521,7 +513,7 @@ map_error_code_t8 __init_map
     Local variables
     ---------------------------------*/
     uint        i;      /* for-loop iterator    */
-    
+
     /*---------------------------------
     Check for null reference
     ---------------------------------*/
@@ -529,40 +521,59 @@ map_error_code_t8 __init_map
     {
         return( ERR_NULL_REF );
     }
-    
+
     /*---------------------------------
     Allocate space for the table
     ---------------------------------*/
-    m->table = (struct __map_element **)malloc( sizeof( struct __map_element * ) * n );
+    m->table = (struct __map_element **)malloc( sizeof( struct __map_element * ) * size );
     if( NULL == m->table )
     {
         return( ERR_NO_MEMORY );
     }
-    
+
     /*---------------------------------
-    Initialize all table element 
+    Initialize all table element
     pointers
     ---------------------------------*/
     for( i = 0; i < size; ++i )
     {
         m->table[ i ] = NULL;
     }
-    
+
     /*---------------------------------
     Set the rest of he stuff
     ---------------------------------*/
     m->size = 0;
-    m->capacity = n;
+    m->capacity = size;
     m->map_type = type;
-    
+
     return( ERR_NO_ERROR );
-    
+
 }   /* __init_map() */
+
+
+void __init_sin_table
+(
+    void
+)
+{
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    int         i;      /* foor-loop iterator       */
+
+    for( i = 0; i < __NUM_CHARACTERS; ++i )
+    {
+        sin_table[ i ] = sinf( (float)( i + 1 ) );
+    }
+    table_initialized = TRUE;
+
+}   /* __init_sin_table() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __is_lower - "Is lowercase"
 *
 *   DESCRIPTION:
@@ -575,15 +586,15 @@ map_error_code_t8 __init_map
 *
 **************************************************/
 boolean __is_lower
-( 
-    char        test    /* character to test    */ 
+(
+    char        test    /* character to test    */
 )
 {
     if( ( test >= 'a' ) && ( test <= 'z' ) )
     {
         return( TRUE );
     }
-    
+
     return( FALSE );
 
 }   /* __is_lower() */
@@ -591,7 +602,7 @@ boolean __is_lower
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __is_number - "Is number"
 *
 *   DESCRIPTION:
@@ -604,15 +615,15 @@ boolean __is_lower
 *
 **************************************************/
 boolean __is_number
-( 
-    char        test    /* character to test    */ 
+(
+    char        test    /* character to test    */
 )
 {
     if( ( test >= '0' ) && ( test <= '9' ) )
     {
         return( TRUE );
     }
-    
+
     return( FALSE );
 
 }   /* __is_number() */
@@ -620,7 +631,7 @@ boolean __is_number
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __is_upper - "Is uppercase"
 *
 *   DESCRIPTION:
@@ -633,15 +644,15 @@ boolean __is_number
 *
 **************************************************/
 boolean __is_upper
-( 
-    char        test    /* character to test    */ 
+(
+    char        test    /* character to test    */
 )
 {
     if( ( test >= 'A' ) && ( test <= 'Z' ) )
     {
         return( TRUE );
     }
-    
+
     return( FALSE );
 
 }   /* __is_upper() */
@@ -649,7 +660,7 @@ boolean __is_upper
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       __resize_map - "Resize Map"
 *
 *   DESCRIPTION:
@@ -657,9 +668,9 @@ boolean __is_upper
 *
 *   RETURNS:
 *       Returns an error code
-*   
+*
 *   ERRORS:
-*       * ERR_NULL_REF is returned if the 
+*       * ERR_NULL_REF is returned if the
 *         map hasn't been created yet (i.e.
 *         it is equal to NULL).
 *       * ERR_NO_MEMORY is returned if this
@@ -683,7 +694,7 @@ map_error_code_t8 __resize_map
     uint32                  old_cap;    /* old capacity         */
     struct __map_element   *cur;        /* current element      */
     struct __map_element  **old_map;    /* old table            */
-    
+
     /*---------------------------------
     Check for a valid map reference
     ---------------------------------*/
@@ -691,13 +702,13 @@ map_error_code_t8 __resize_map
     {
         return( ERR_NULL_REF );
     }
-    
+
     /*---------------------------------
     Store the old table values
     ---------------------------------*/
     old_map = m->table;
     old_cap = m->capacity;
-    
+
     /*---------------------------------
     Resize the map
     ---------------------------------*/
@@ -707,7 +718,7 @@ map_error_code_t8 __resize_map
         __free_table( old_map, old_cap );
         return( error );
     }
-    
+
     /*---------------------------------
     Add all of the elements from the
     old table to the new table
@@ -723,24 +734,24 @@ map_error_code_t8 __resize_map
                 __free_table( old_map, old_cap );
                 return( error );
             }
-            
+
             cur = cur->next;
         }
     }
-    
+
     /*---------------------------------
     Free the old table
     ---------------------------------*/
     __free_table( old_map, old_cap );
-    
+
     return( ERR_NO_ERROR );
-    
+
 }   /* __resize_map() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       create_map - "Create Map"
 *
 *   DESCRIPTION:
@@ -759,14 +770,19 @@ struct map *create_map
     void
 )
 {
+    if( !table_initialized )
+    {
+        __init_sin_table();
+    }
+
     return( (struct map *)malloc( sizeof( struct map ) ) );
-    
+
 }   /* create() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       init_dynamic_map - "Initialize Dynamic Map"
 *
 *   DESCRIPTION:
@@ -777,9 +793,9 @@ struct map *create_map
 *
 *   RETURNS:
 *       Returns an error code
-*   
+*
 *   ERRORS:
-*       * ERR_NULL_REF is returned if the 
+*       * ERR_NULL_REF is returned if the
 *         map hasn't been created yet (i.e.
 *         it is equal to NULL).
 *       * ERR_NO_MEMORY is returned if this
@@ -796,18 +812,18 @@ struct map *create_map
 *
 **************************************************/
 map_error_code_t8 init_dynamic_map
-( 
-    struct map *m       /* map to initialize    */ 
+(
+    struct map *m       /* map to initialize    */
 )
 {
     return( __init_map( m, __INITIAL_SIZE, __MAP_TYPE_DYNAMIC ) );
-    
+
 }   /* init_dynamic_map() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       init_static_map - "Initialize Static Map"
 *
 *   DESCRIPTION:
@@ -817,9 +833,9 @@ map_error_code_t8 init_dynamic_map
 *
 *   RETURNS:
 *       Returns an error code
-*   
+*
 *   ERRORS:
-*       * ERR_NULL_REF is returned if the 
+*       * ERR_NULL_REF is returned if the
 *         map hasn't been created yet (i.e.
 *         it is equal to NULL).
 *       * ERR_NO_MEMORY is returned if this
@@ -830,27 +846,27 @@ map_error_code_t8 init_dynamic_map
 *
 **************************************************/
 map_error_code_t8 init_static_map
-( 
-    struct map *m       /* map to initialize    */ 
+(
+    struct map *m       /* map to initialize    */
 )
 {
     return( __init_map( m, __INITIAL_SIZE, __MAP_TYPE_STATIC ) );
-    
+
 }   /* init_static_map() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       add_map - "Add to Map"
 *
 *   DESCRIPTION:
 *       This adds a key-value pair to a map.
-*       
+*
 *       If an element has the same key as the
-*       provided key, then the function 
+*       provided key, then the function
 *       will do one of the following:
-*           1. The function will return the 
+*           1. The function will return the
 *              handle of the element's value
 *              data to the user if the values
 *              are the same
@@ -864,14 +880,14 @@ map_error_code_t8 init_static_map
 *   RETURNS:
 *       Returns a handle to the value stored
 *       in the map element.
-*   
+*
 *   ERRORS:
 *       * 0 is returned if there was an error
 *         adding to the map.
 *
 **************************************************/
 uint32 add_map
-( 
+(
     struct map *m,      /* map we're adding to  */
     key_t8      key,    /* the element's key    */
     void       *val,    /* the element's value  */
@@ -883,7 +899,7 @@ uint32 add_map
     ---------------------------------*/
     uint32                  idx;            /* hashed index of the new element  */
     struct __map_element   *new_element;    /* element to add                   */
-    
+
     /*---------------------------------
     Check if the map reference is valid
     ---------------------------------*/
@@ -891,7 +907,7 @@ uint32 add_map
     {
         return( ERR_NULL_REF );
     }
-    
+
     /*---------------------------------
     Check if key exists in map already
     ---------------------------------*/
@@ -905,19 +921,19 @@ uint32 add_map
         {
             return( __ptr_to_handle( new_element->val ) );
         }
-        
+
         /*-----------------------------
         Clear all element data and
         copy over the new stuff
         -----------------------------*/
         __free_element_data( new_element );
-        if( ERR_NO_ERROR != __init_element( new_element, key, value, size ) )
+        if( ERR_NO_ERROR != __init_element( new_element, key, val, size ) )
         {
             return( 0 );
         }
         return( __ptr_to_handle( new_element->val ) );
     }
-    
+
     /*---------------------------------
     Check if we need to resize the map
     ---------------------------------*/
@@ -929,7 +945,7 @@ uint32 add_map
             return( 0 );
         }
     }
-    
+
     /*---------------------------------
     Create a new map element
     ---------------------------------*/
@@ -938,7 +954,7 @@ uint32 add_map
     {
         return( 0 );
     }
-    
+
     /*---------------------------------
     Initialize the map element
     ---------------------------------*/
@@ -946,7 +962,7 @@ uint32 add_map
     {
         return( 0 );
     }
-    
+
     /*---------------------------------
     Do some other stuff
     ---------------------------------*/
@@ -954,15 +970,15 @@ uint32 add_map
     new_element->next = m->table[ idx ];
     m->table[ idx ] = new_element;
     ++m->size;
-    
+
     return( __ptr_to_handle( new_element->val ) );
-    
+
 }   /* add_map() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       is_in_map - "Is Key in the Map?"
 *
 *   DESCRIPTION:
@@ -976,8 +992,8 @@ uint32 add_map
 *
 **************************************************/
 boolean is_in_map
-( 
-    struct map *m,      /* map                  */ 
+(
+    struct map *m,      /* map                  */
     key_t8      key     /* key to find          */
 )
 {
@@ -985,20 +1001,20 @@ boolean is_in_map
     Local variables
     ---------------------------------*/
     struct __map_element   *e;      /* current element      */
-    
+
     e = __get_element( m, key );
     if( NULL == e )
     {
         return( FALSE );
     }
     return( TRUE );
-    
+
 }   /* is_in_map() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   FUNCTION:
 *       get - "Get Value from Key"
 *
 *   DESCRIPTION:
@@ -1010,7 +1026,7 @@ boolean is_in_map
 *       if any elements have a key matching the
 *       supplied key. If they don't this function
 *       returns NULL.
-*   
+*
 **************************************************/
 void *get
 (
@@ -1022,20 +1038,78 @@ void *get
     Local variables
     ---------------------------------*/
     struct __map_element   *e;      /* map element          */
-    
+
     e = __get_element( m, key );
     if( NULL == e )
     {
         return( NULL );
     }
     return( e->val );
-    
+
 }   /* get() */
 
 
 /**************************************************
 *
-*   FUNCTION: 
+*   NAME:
+*       get_map_size - "Get Map Size"
+*
+*   DESCRIPTION:
+*       Returns the size of the map. Size, in
+*       this context, is the number of elements
+*       in the map.
+*
+*   ERRORS:
+*       * Returns 0 if there is an error (or
+*         if there are no elements in the map).
+*
+**************************************************/
+uint32 get_map_size
+(
+    struct map *m       /* map                  */
+)
+{
+    if( NULL == m )
+    {
+        return( 0 );
+    }
+    return( m->size );
+
+}   /* get_map_size() */
+
+
+/**************************************************
+*
+*   NAME:
+*       get_map_capacity - "Get Map Capacity"
+*
+*   DESCRIPTION:
+*       Returns the capacity of the map. Capacity,
+*       in this context, is the number of buckets
+*       in the map.
+*
+*   ERRORS:
+*       * Returns 0 if there is an error (or if
+*         there are no buckets).
+*
+**************************************************/
+uint32 get_map_capacity
+(
+    struct map *m       /* map                  */
+)
+{
+    if( NULL == m )
+    {
+        return( 0 );
+    }
+    return( m->capacity );
+
+}   /* get_map_capacity() */
+
+
+/**************************************************
+*
+*   FUNCTION:
 *       free_map - "Free Map"
 *
 *   DESCRIPTION:
@@ -1054,12 +1128,40 @@ void free_map
     {
         return;
     }
-    
+
     /*---------------------------------
     Free the table, and then free the
     map
     ---------------------------------*/
-    __free_table( m->table );
+    __free_table( m->table, m->capacity );
     free( m );
-    
+
 }   /* free_map() */
+
+
+map_error_code_t8 show_map
+(
+    struct map     *m,          /* map to print             */
+    disp_callback   disp_func   /* display function to use  */
+)
+{
+    uint32 i;
+    struct __map_element *cur;
+
+    if( NULL == m )
+    {
+        return( ERR_NULL_REF );
+    }
+
+    for( i = 0; i < m->capacity; ++i )
+    {
+        cur = m->table[ i ];
+        while( NULL != cur )
+        {
+            printf( "Key: %s\t\tValue: ", cur->key );
+            disp_func( cur->val );
+            cur = cur->next;
+        }
+    }
+
+}   /* show_map() */

@@ -20,7 +20,7 @@ PROJECT INCLUDES
 /*-------------------------------------------------
                       CONSTANTS
 -------------------------------------------------*/
-typedef map_error_code_t8 sint8; 
+typedef sint8 map_error_code_t8;
 enum
 {
     ERR_NO_ERROR  =  0,     /* "no error" identifier    */
@@ -32,8 +32,15 @@ enum
                         TYPES
 -------------------------------------------------*/
 
-typedef key_t8 char *;
+typedef char* key_t8;
 struct map;
+typedef struct map HashMap;
+
+/*-------------------------------------------------
+                      VARIABLES
+-------------------------------------------------*/
+
+typedef void (*disp_callback)( void *data );
 
 /*-------------------------------------------------
                 FUNCTION PROTOTYPES
@@ -45,17 +52,17 @@ struct map *create_map
 );
 
 map_error_code_t8 init_dynamic_map
-( 
-    struct map *m       /* map to initialize    */ 
+(
+    struct map *m       /* map to initialize    */
 );
 
 map_error_code_t8 init_static_map
-( 
-    struct map *m       /* map to initialize    */ 
+(
+    struct map *m       /* map to initialize    */
 );
 
 uint32 add_map
-( 
+(
     struct map *m,      /* map we're adding to  */
     key_t8      key,    /* the element's key    */
     void       *val,    /* the element's value  */
@@ -63,8 +70,8 @@ uint32 add_map
 );
 
 boolean is_in_map
-( 
-    struct map *m,      /* map                  */ 
+(
+    struct map *m,      /* map                  */
     key_t8      key     /* key to find          */
 );
 
@@ -74,9 +81,25 @@ void *get
     key_t8      key     /* key to return        */
 );
 
+uint32 get_map_size
+(
+    struct map *m       /* map                  */
+);
+
+uint32 get_map_capacity
+(
+    struct map *m       /* map                  */
+);
+
 void free_map
 (
     struct map *m       /* map to free          */
+);
+
+map_error_code_t8 show_map
+(
+    struct map     *m,          /* map to print             */
+    disp_callback   disp_func   /* display function to use  */
 );
 
 #endif  /* __HASHMAP_H__ */
