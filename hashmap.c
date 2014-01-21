@@ -565,10 +565,10 @@ map_error_code_t8 __resize_map
         while( NULL != cur )
         {
             error = add_map( m, cur->key, cur->val, cur->size );
-            if( ERR_NO_ERROR != error )
+            if( 0 == error )
             {
                 __free_table( old_map, old_cap );
-                return( error );
+                return( ERR_ADD_ERROR );
             }
 
             cur = cur->next;
@@ -736,7 +736,7 @@ uint32 add_map
     ---------------------------------*/
     if( NULL == m )
     {
-        return( ERR_NULL_REF );
+        return( 0 );
     }
 
     /*---------------------------------
@@ -764,6 +764,8 @@ uint32 add_map
         }
         return( __ptr_to_handle( new_element->val ) );
     }
+
+    new_element = NULL;
 
     /*---------------------------------
     Check if we need to resize the map
@@ -802,7 +804,7 @@ uint32 add_map
     m->table[ idx ] = new_element;
     ++m->size;
 
-    return( __ptr_to_handle( new_element->val ) );
+    return( (uint32)( new_element->val ) );
 
 }   /* add_map() */
 
