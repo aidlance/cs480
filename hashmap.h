@@ -25,7 +25,8 @@ enum
 {
     ERR_NO_ERROR  =  0,     /* "no error" identifier    */
     ERR_NO_MEMORY = -1,     /* "out of memory" error    */
-    ERR_NULL_REF  = -2      /* "null reference" error   */
+    ERR_NULL_REF  = -2,     /* "null reference" error   */
+    ERR_ADD_ERROR = -3      /* "element adding" error   */
 };
 
 /*-------------------------------------------------

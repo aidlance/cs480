@@ -12,7 +12,6 @@
 /*-------------------------------------------------
                 PROJECT INCLUDES
 -------------------------------------------------*/
-#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -23,7 +22,9 @@
 /*-------------------------------------------------
                       CONSTANTS
 -------------------------------------------------*/
-#define __INITIAL_SIZE 512
+#define __INITIAL_SIZE     512
+#define __HASH_PRIME       16777619
+#define __INITIAL_HASH_IDX 2166136261UL
 
 typedef uint8 __map_type_t8;
 enum
@@ -54,32 +55,6 @@ struct map
     struct __map_element
               **table;      /* the table                */
 };  /* map */
-
-/*-------------------------------------------------
-                   GLOBAL VARIABLES
--------------------------------------------------*/
-
-/*-------------------------------------
-Index definitions corresponding to
-indices of the static lookup
-table below.
--------------------------------------*/
-enum
-{
-    __LOWER_INDEX    = 0,       /* start index of lowercase letters in sin_table    */
-    __UPPER_INDEX    = 26,      /* start index of uppercase letters in sin_table    */
-    __NUMBER_INDEX   = 52,      /* start index of numbers in sin_table              */
-    __MISC_INDEX     = 62,      /* index of the miscellaneous sin_table element     */
-    __NUM_CHARACTERS = 63       /* number of elements in sin_table                  */
-};
-
-/*-------------------------------------
-Static lookup table.
-
-Used when hashing the key to an index.
--------------------------------------*/
-static float sin_table[ __NUM_CHARACTERS ];
-static boolean table_initialized = FALSE;
 
 /*-------------------------------------------------
                       MACROS
@@ -157,26 +132,6 @@ map_error_code_t8 __init_map
     uint        size,   /* size of the map      */
     __map_type_t8
                 type    /* type of map to init  */
-);
-
-void __init_sin_table
-(
-    void
-);
-
-boolean __is_lower
-(
-    char        test    /* character to test    */
-);
-
-boolean __is_number
-(
-    char        test    /* character to test    */
-);
-
-boolean __is_upper
-(
-    char        test    /* character to test    */
 );
 
 map_error_code_t8 __resize_map
@@ -354,6 +309,11 @@ struct __map_element *__get_element
 *       This function hashes a key and returns
 *       an integer between 0 and n.
 *
+*       Uses FNV-1a hashing algorithm found
+*       here:
+*
+*       http://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function
+*
 *   RETURNS:
 *       Returns an unsigned integer between
 *       0 and n.
@@ -370,37 +330,19 @@ uint32 __hash_key
     Local variables
     ---------------------------------*/
     key_t8      ptr;    /* character in key     */
-    float       tot;    /* accumulator          */
     uint32      idx;    /* index for an array   */
 
+    idx = __INITIAL_HASH_IDX;
     ptr = key;
     while( *ptr != '\0' )
     {
-        if( __is_upper( (char)( *ptr ) ) )
-        {
-            idx = ( __UPPER_INDEX + *ptr - 'A' + (uint32)ptr ) % __NUM_CHARACTERS;
-        }
-        else if( __is_lower( (char)( *ptr ) ) )
-        {
-            idx = ( __LOWER_INDEX + *ptr - 'a' + (uint32)ptr ) % __NUM_CHARACTERS;
-        }
-        else if( __is_number( (char)( *ptr ) ) )
-        {
-            idx = ( __NUMBER_INDEX + *ptr - '0' + (uint32)ptr ) % __NUM_CHARACTERS;
-        }
-        else
-        {
-            idx = __MISC_INDEX;
-        }
-
-        tot += sin_table[ idx ];
+        idx = ( idx ^ *ptr ) * __HASH_PRIME;
         ++ptr;
     }
 
-    tot *= (float)n;
-    return( ( (uint32)tot ) % n );
+    return( idx % n );
 
-}   /* __hash_str() */
+}   /* __hash_key() */
 
 
 /**************************************************
@@ -552,112 +494,6 @@ map_error_code_t8 __init_map
 }   /* __init_map() */
 
 
-void __init_sin_table
-(
-    void
-)
-{
-    /*---------------------------------
-    Local variables
-    ---------------------------------*/
-    int         i;      /* foor-loop iterator       */
-
-    for( i = 0; i < __NUM_CHARACTERS; ++i )
-    {
-        sin_table[ i ] = sinf( (float)( i + 1 ) );
-    }
-    table_initialized = TRUE;
-
-}   /* __init_sin_table() */
-
-
-/**************************************************
-*
-*   FUNCTION:
-*       __is_lower - "Is lowercase"
-*
-*   DESCRIPTION:
-*       This function checks whether a character
-*       is lowercase or not.
-*
-*   RETURNS:
-*       Returns TRUE if test is lowercase, and
-*       FALSE otherwise.
-*
-**************************************************/
-boolean __is_lower
-(
-    char        test    /* character to test    */
-)
-{
-    if( ( test >= 'a' ) && ( test <= 'z' ) )
-    {
-        return( TRUE );
-    }
-
-    return( FALSE );
-
-}   /* __is_lower() */
-
-
-/**************************************************
-*
-*   FUNCTION:
-*       __is_number - "Is number"
-*
-*   DESCRIPTION:
-*       This function checks whether a character
-*       is a number or not.
-*
-*   RETURNS:
-*       Returns TRUE if test is a number, and
-*       FALSE otherwise.
-*
-**************************************************/
-boolean __is_number
-(
-    char        test    /* character to test    */
-)
-{
-    if( ( test >= '0' ) && ( test <= '9' ) )
-    {
-        return( TRUE );
-    }
-
-    return( FALSE );
-
-}   /* __is_number() */
-
-
-/**************************************************
-*
-*   FUNCTION:
-*       __is_upper - "Is uppercase"
-*
-*   DESCRIPTION:
-*       This function checks whether a character
-*       is uppercase or not.
-*
-*   RETURNS:
-*       Returns TRUE if test is uppercase, and
-*       FALSE otherwise.
-*
-**************************************************/
-boolean __is_upper
-(
-    char        test    /* character to test    */
-)
-{
-    if( ( test >= 'A' ) && ( test <= 'Z' ) )
-    {
-        return( TRUE );
-    }
-
-    return( FALSE );
-
-}   /* __is_upper() */
-
-
 /**************************************************
 *
 *   FUNCTION:
@@ -729,10 +565,10 @@ map_error_code_t8 __resize_map
         while( NULL != cur )
         {
             error = add_map( m, cur->key, cur->val, cur->size );
-            if( ERR_NO_ERROR != error )
+            if( 0 == error )
             {
                 __free_table( old_map, old_cap );
-                return( error );
+                return( ERR_ADD_ERROR );
             }
 
             cur = cur->next;
@@ -770,11 +606,6 @@ struct map *create_map
     void
 )
 {
-    if( !table_initialized )
-    {
-        __init_sin_table();
-    }
-
     return( (struct map *)malloc( sizeof( struct map ) ) );
 
 }   /* create() */
@@ -905,7 +736,7 @@ uint32 add_map
     ---------------------------------*/
     if( NULL == m )
     {
-        return( ERR_NULL_REF );
+        return( 0 );
     }
 
     /*---------------------------------
@@ -934,11 +765,13 @@ uint32 add_map
         return( __ptr_to_handle( new_element->val ) );
     }
 
+    new_element = NULL;
+
     /*---------------------------------
     Check if we need to resize the map
     ---------------------------------*/
     if( ( __MAP_TYPE_DYNAMIC == m->map_type )
-     && ( ( (float)m->size / m->capacity ) >= 1.75f ) )
+     && ( ( (float)m->size / m->capacity ) >= 1.50f ) )
     {
         if( ERR_NO_ERROR != __resize_map( m, m->capacity << 1 ) )
         {
@@ -971,7 +804,7 @@ uint32 add_map
     m->table[ idx ] = new_element;
     ++m->size;
 
-    return( __ptr_to_handle( new_element->val ) );
+    return( (uint32)( new_element->val ) );
 
 }   /* add_map() */
 
@@ -1139,20 +972,48 @@ void free_map
 }   /* free_map() */
 
 
+/**************************************************
+*
+*   FUNCTION:
+*       show_map - "Show Map"
+*
+*   DESCRIPTION:
+*       Prints the hash table.
+*
+*   NOTE:
+*       A callback function is required to be
+*       provided as a parameter for this.
+*       The callback function should be designed
+*       to print out whatever value is stored
+*       with the key.
+*
+**************************************************/
 map_error_code_t8 show_map
 (
     struct map     *m,          /* map to print             */
     disp_callback   disp_func   /* display function to use  */
 )
 {
-    uint32 i;
-    struct __map_element *cur;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    uint32                  i;      /* for-loop iterator    */
+    struct __map_element   *cur;    /* current map element  */
 
+    /*---------------------------------
+    Ensure the map reference is valid
+    ---------------------------------*/
     if( NULL == m )
     {
         return( ERR_NULL_REF );
     }
 
+    /*---------------------------------
+    Loop through all non-null entries
+    in the map, print the keys, and
+    call the callback function to
+    print the values
+    ---------------------------------*/
     for( i = 0; i < m->capacity; ++i )
     {
         cur = m->table[ i ];
@@ -1163,5 +1024,7 @@ map_error_code_t8 show_map
             cur = cur->next;
         }
     }
+
+    return( ERR_NO_ERROR );
 
 }   /* show_map() */
