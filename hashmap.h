@@ -13,7 +13,7 @@
 #define __HASHMAP_H__
 
 /*-------------------------------------------------
-PROJECT INCLUDES
+                   PROJECT INCLUDES
 -------------------------------------------------*/
 #include "types.h"
 
@@ -54,12 +54,14 @@ struct map *create_map
 
 map_error_code_t8 init_dynamic_map
 (
-    struct map *m       /* map to initialize    */
+    struct map *m,      /* map to initialize    */
+    sint        n       /* size of the map      */
 );
 
 map_error_code_t8 init_static_map
 (
-    struct map *m       /* map to initialize    */
+    struct map *m,      /* map to initialize    */
+    sint        n       /* size of the map      */
 );
 
 uint32 add_map
