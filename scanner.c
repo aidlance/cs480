@@ -1,68 +1,210 @@
+/**************************************************
+*
+*   MODULE:
+*       scanner.c
+*
+*   DESCRIPTION:
+*       Implementation of the lexical scanner
+*
+**************************************************/
+
+/*-------------------------------------------------
+                 PROJECT INCLUDES
+-------------------------------------------------*/
+
 #include <stdio.h>
 #include <string.h>
 
 #include "scanner.h"
-#include "types.h"
-#include "tokens.h"
 #include "symbol_table.h"
+#include "tokens.h"
+#include "types.h"
 
-#define __MAX_WORD_LEN 255
+/*-------------------------------------------------
+                LITERAL CONSTANTS
+-------------------------------------------------*/
 
-enum
-{
-    NOT_LETTER_OR_NUMBER,
-    IS_LETTER,
-    IS_NUMBER
-};
+#define __MAX_WORD_LEN 255              /* maximum length allowed in a word     */
 
-static char     __cur_char  = '\0';
-static char     __prev_char = '\0';
-static char     __next_char = '\0';
-static uint32   __cur_col   = 0;
-static uint32   __cur_line  = 0;
+/*-------------------------------------------------
+                GLOBAL VARIABLES
+-------------------------------------------------*/
 
-inline boolean __is_lower( char test )
-{
-    return( ( test >= 'a' ) && ( test <= 'z' ) );
-}
+static char     __cur_char  = '\0';     /* current character from input file    */
+static char     __prev_char = '\0';     /* previous character from input file   */
+static char     __next_char = '\0';     /* next character in the input file     */
+static uint32   __cur_col   = 0;        /* current column counter               */
+static uint32   __cur_line  = 0;        /* current line counter                 */
 
-inline boolean __is_number( char test )
-{
-    return( ( test >= '0' ) && ( test <= '9' ) );
-}
+/*-------------------------------------------------
+                FUNCTION PROTOTYPES
+-------------------------------------------------*/
 
-inline boolean __is_upper( char test )
-{
-    return( ( test >= 'A' ) && ( test <= 'Z' ) );
-}
+inline boolean __is_letter
+(
+    char        test        /* character to test    */
+);
 
-inline boolean __is_letter( char test )
+inline boolean __is_lower
+(
+    char        test        /* character to test    */
+);
+
+inline boolean __is_number
+(
+    char        test        /* character to test    */
+);
+
+inline boolean __is_upper
+(
+    char        test        /* character to test    */
+);
+
+char __get_next_char
+(
+    FILE       *f           /* file to process      */
+);
+
+void __write_error
+(
+    sint8       err_code,   /* error code               */
+    uint32      err_line,   /* line error occurred on   */
+    uint32      err_col     /* column error occurred on */
+);
+
+void __write_token
+(
+    uint8       token_class,/* token class          */
+    sint8       misc_info,  /* other info           */
+    char       *lexeme      /* lexeme to print      */
+);
+
+/*-------------------------------------------------
+                        MACROS
+-------------------------------------------------*/
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       __is_letter - "Is Letter"
+*
+*   DESCRIPTION:
+*       Determines whether a character is a
+*       letter.
+*
+*   RETURNS:
+*       Returns TRUE if test is a letter,
+*       and FALSE if it isn't.
+*
+**************************************************/
+inline boolean __is_letter
+(
+    char        test        /* character to test    */
+)
 {
     return( __is_upper( test ) || __is_lower( test ) );
-}
 
-scanner_error_t8 init_scanner()
+}   /* __is_letter() */
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       __is_lower - "Is Lower"
+*
+*   DESCRIPTION:
+*       Determines whether a character is a
+*       lowercase letter.
+*
+*   RETURNS:
+*       Returns TRUE if test is lowercase,
+*       and FALSE if it's uppercase.
+*
+**************************************************/
+inline boolean __is_lower
+(
+    char        test        /* character to test    */
+)
 {
-    sym_table_error_t8 error = init_symbol_table();
-    if( ( SYM_NO_ERROR != error )
-     && ( SYM_ALREADY_INITIALIZED != error ) )
-    {
-        return( SCN_INIT_ERROR );
-    }
+    return( ( test >= 'a' ) && ( test <= 'z' ) );
 
-    return( SCN_NO_ERROR );
+}   /* __is_lower() */
 
-}   /* init_scanner() */
 
-scanner_error_t8 unload_scanner()
+/**************************************************
+*
+*   FUNCTION:
+*       __is_number - "Is Number"
+*
+*   DESCRIPTION:
+*       Determines whether a character is a
+*       number.
+*
+*   RETURNS:
+*       Returns TRUE if test is a number,
+*       and FALSE if it isn't.
+*
+**************************************************/
+inline boolean __is_number
+(
+    char        test        /* character to test    */
+)
 {
-    unload_tables();
-    return( SCN_NO_ERROR );
+    return( ( test >= '0' ) && ( test <= '9' ) );
 
-}
+}   /* __is_number() */
 
-char __get_next_char( FILE *f )
+
+/**************************************************
+*
+*   FUNCTION:
+*       __is_upper - "Is Upper"
+*
+*   DESCRIPTION:
+*       Determines whether a character is an
+*       uppercase letter.
+*
+*   RETURNS:
+*       Returns TRUE if test is uppercase,
+*       and FALSE if it isn't.
+*
+**************************************************/
+inline boolean __is_upper
+(
+    char        test        /* character to test    */
+)
 {
+    return( ( test >= 'A' ) && ( test <= 'Z' ) );
+
+}   /* __is_upper() */
+
+/*-------------------------------------------------
+                      PROCEDURES
+-------------------------------------------------*/
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       __get_next_char - "Get Next Character"
+*
+*   DESCRIPTION:
+*       Grabs the next character from a file
+*
+*   RETURNS:
+*       Returns the next character in a file
+*
+**************************************************/
+char __get_next_char
+(
+    FILE       *f           /* file to process      */
+)
+{
+    /*---------------------------------
+    Loop until we hit a non-whitespace
+    character
+    ---------------------------------*/
     do
     {
         __cur_col++;
@@ -75,6 +217,10 @@ char __get_next_char( FILE *f )
         }
     } while( ( ' ' == __cur_char ) || ( '\t' == __cur_char ) );
 
+    /*---------------------------------
+    Update the current line and
+    current column counters
+    ---------------------------------*/
     if( '\n' == __cur_char )
     {
         __cur_line++;
@@ -83,9 +229,24 @@ char __get_next_char( FILE *f )
 
     return( __cur_char );
 
-}
+}   /* __get_next_char() */
 
-void __write_error( sint8 err_code, uint32 err_line, uint32 err_col )
+
+/**************************************************
+*
+*   FUNCTION:
+*       __write_error - "Write Error"
+*
+*   DESCRIPTION:
+*       Writes an error message to stderr
+*
+**************************************************/
+void __write_error
+(
+    sint8       err_code,   /* error code               */
+    uint32      err_line,   /* line error occurred on   */
+    uint32      err_col     /* column error occurred on */
+)
 {
     switch( err_code )
     {
@@ -117,9 +278,25 @@ void __write_error( sint8 err_code, uint32 err_line, uint32 err_col )
             fprintf( stderr, "SCANNER ERROR: Error code nonexistent.");
             break;
     }
-}
 
-void __write_token( uint8 token_class, sint8 misc_info, char *lexeme )
+}   /* __write_error() */
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       __write_token - "Write Token"
+*
+*   DESCRIPTION:
+*       Writes token data to stdout
+*
+**************************************************/
+void __write_token
+(
+    uint8       token_class,/* token class          */
+    sint8       misc_info,  /* other info           */
+    char       *lexeme      /* lexeme to print      */
+)
 {
     switch( token_class )
     {
@@ -151,76 +328,195 @@ void __write_token( uint8 token_class, sint8 misc_info, char *lexeme )
             fprintf( stderr, "Unknown token class.\n" );
             break;
     }
-}
 
-scanner_error_t8  tokenize
+}   /* __write_token() */
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       init_scanner - "Initialize Scanner"
+*
+*   DESCCRIPTION:
+*       Initializes the scanner for use
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       * Returns SCN_NO_ERROR if there were
+*         no errors
+*       * Returns SCN_INIT_ERROR if there were
+*         problems initializing the scanner
+*
+**************************************************/
+scanner_error_t8 init_scanner
 (
-    char *file_name
+    void
 )
 {
-    uint32      cur_idx;
-    FILE       *f;
-    char        read_char;
-    char        word[ __MAX_WORD_LEN ];
-    struct token_type token;
-    uint32 start_col;
-    boolean errored;
-    boolean is_float;
-    boolean dot_seen;
+    /*---------------------------------
+    Initialize the symbol table
+    ---------------------------------*/
+    sym_table_error_t8 error = init_symbol_table();
+    if( ( SYM_NO_ERROR != error )
+     && ( SYM_ALREADY_INITIALIZED != error ) )
+    {
+        return( SCN_INIT_ERROR );
+    }
 
+    return( SCN_NO_ERROR );
+
+}   /* init_scanner() */
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       tokenize - "Tokenize"
+*
+*   DESCRIPTION:
+*       Tokenizes a file. All of the proccessed
+*       tokens are written to stdout.
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       * Returns SCN_NO_ERROR if there were
+*         no errors
+*       * Returns SCN_OPEN_ERROR if there was
+*         an issue opening a file
+*
+*   TODO:
+*       CLEAN THIS UP!
+*
+**************************************************/
+scanner_error_t8  tokenize
+(
+    char       *file_name   /* file to scan     */
+)
+{
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    uint32      cur_idx;                /* current index in word buffer */
+    boolean     dot_seen;               /* have we already seen a       */
+                                        /*  decimal point (in a float)? */
+    boolean     errored;                /* did we see a scanning error? */
+    FILE       *f;                      /* file pointer                 */
+    boolean     is_float;               /* are we processing a float?   */
+    char        read_char;              /* character read from file     */
+    uint32      start_col;              /* starting column              */
+    struct token_type
+                token;                  /* identifier token to create   */
+    char        word[ __MAX_WORD_LEN ]; /* word buffer                  */
+
+    /*---------------------------------
+    Attempt to open the file
+    ---------------------------------*/
     f = fopen( file_name, "r" );
     if( NULL == f )
     {
         return( SCN_OPEN_ERROR );
     }
 
+    /*---------------------------------
+    Initialize some of the variables
+    ---------------------------------*/
     cur_idx    = 0;
     __cur_col  = 0;
     __cur_line = 0;
+
+    /*---------------------------------
+    Grab the first character from
+    the file and continue to read
+    until the end of file is reached
+    ---------------------------------*/
     read_char = __get_next_char( f );
     while( EOF != read_char )
     {
+        /*-----------------------------
+        Check if we have a NULL
+        terminator
+        -----------------------------*/
         if( '\0' == read_char )
         {
             read_char = __get_next_char( f );
             continue;
         }
 
+        /*-----------------------------
+        Ensure that our index and
+        buffer are ready for some
+        work
+        -----------------------------*/
         cur_idx = 0;
         word[ cur_idx ] = '\0';
 
+        /*-----------------------------
+        and now for the ugly part...
+        -----------------------------*/
         switch( read_char )
         {
             case '<':
+                /*--------------------
+                Check if we will have
+                a '<=' symbol
+                ---------------------*/
                 if( '=' == __next_char )
                 {
                     break;
                 }
 
+                /*---------------------
+                Create the token string
+                and write the token
+                ---------------------*/
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_LT_OPP, word );
                 break;
 
             case '=':
-                if( ( '<' == __prev_char ) && ( ( ' ' != __prev_char ) || ( '\t' != __prev_char ) || ( '\n' != __prev_char ) ) )
+                /*---------------------
+                These check whether the
+                previous character was
+                any symbol preceding
+                an equal sign (i.e.
+                <=, >=, !=, :=) <-- not
+                planned
+                ---------------------*/
+                if( ( '<' == __prev_char    )
+                 && ( ( ' ' != __prev_char  )
+                   || ( '\t' != __prev_char )
+                   || ( '\n' != __prev_char ) ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_LE_OPP, word );
                     break;
                 }
-                else if( ( '>' == __prev_char ) && ( ( ' ' != __prev_char ) || ( '\t' != __prev_char ) || ( '\n' != __prev_char ) ) )
+                else if( ( '>' == __prev_char    )
+                      && ( ( ' ' != __prev_char  )
+                        || ( '\t' != __prev_char )
+                        || ( '\n' != __prev_char ) ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_GT_OPP, word );
                     break;
                 }
-                else if( ( ':' == __prev_char ) && ( ( ' ' != __prev_char ) || ( '\t' != __prev_char ) || ( '\n' != __prev_char ) ) )
+                else if( ( ':' == __prev_char  )
+                    && ( ( ' ' != __prev_char  )
+                      || ( '\t' != __prev_char )
+                      || ( '\n' != __prev_char ) ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_ASSN_OPP, word );
                     break;
                 }
-                else if( ( '!' == __prev_char ) && ( ( ' ' != __prev_char ) || ( '\t' != __prev_char ) || ( '\n' != __prev_char ) ) )
+                else if( ( '!' == __prev_char    )
+                      && ( ( ' ' != __prev_char  )
+                        || ( '\t' != __prev_char )
+                        || ( '\n' != __prev_char ) ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_NE_OPP, word );
@@ -232,6 +528,10 @@ scanner_error_t8  tokenize
                 break;
 
             case '>':
+                /*---------------------
+                Check if the symbol
+                will be a <= sign
+                ---------------------*/
                 if( '=' == __next_char )
                 {
                     break;
@@ -242,6 +542,10 @@ scanner_error_t8  tokenize
                 break;
 
             case '!':
+                /*---------------------
+                Check if the symbol
+                will be a != sign
+                ---------------------*/
                 if( '=' == __next_char )
                 {
                     break;
@@ -261,6 +565,12 @@ scanner_error_t8  tokenize
                 break;
 
             case '-':
+                /*---------------------
+                If a sub op is directly
+                adjacent to a letter
+                or a number, then it
+                becomes a unary op.
+                ---------------------*/
                 if( __is_number( __next_char ) || ( __is_letter( __next_char ) ) )
                 {
                     sprintf( word, "%c", __cur_char );
@@ -273,6 +583,12 @@ scanner_error_t8  tokenize
                 break;
 
             case '+':
+                /*---------------------
+                If an add op is directly
+                adjacent to a letter
+                or a number, then it
+                becomes a unary op.
+                ---------------------*/
                 if( __is_number( __next_char ) || __is_letter( __next_char ) )
                 {
                     sprintf( word, "%c", __cur_char );
@@ -305,6 +621,12 @@ scanner_error_t8  tokenize
                 break;
 
             case ':':
+                /*---------------------
+                Unless the colon is
+                followed by an equal
+                sign, it isn't in our
+                grammar.
+                ---------------------*/
                 if( '=' == __next_char )
                 {
                     break;
@@ -315,24 +637,61 @@ scanner_error_t8  tokenize
             case ' ':
             case '\t':
             case '\n':
+                /*---------------------
+                We break for whitespace
+                ---------------------*/
                 break;
 
             case '"':
+                /*---------------------
+                If a string symbol is
+                encountered, read from
+                the file until we either
+                see the corresponding
+                end string, we hit a
+                newline, or we blow our
+                buffer.
+                ---------------------*/
                 start_col = __cur_col;
                 errored = FALSE;
                 do
                 {
+                    /*-----------------
+                    Check for buffer
+                    overflow
+                    -----------------*/
                     if( cur_idx >= __MAX_WORD_LEN )
                     {
                         __write_error( SCN_BUFFER_OVERFLOW, __cur_line, start_col );
                         errored = TRUE;
+                        /*-------------
+                        Grab all chars
+                        until the string
+                        ends
+                        -------------*/
+                        while( (' '   != __get_next_char( f ) )
+                            && ( '\t' != __get_next_char( f ) )
+                            && ( '\n' != __get_next_char( f ) )
+                            && ( '"'  != __get_next_char( f ) ) );
                         break;
                     }
 
+                    /*-----------------
+                    Copy the character
+                    to the word buffer
+                    -----------------*/
                     word[ cur_idx++ ] = read_char;
                     word[ cur_idx ] = '\0';
 
+                    /*-----------------
+                    Get the next char
+                    -----------------*/
                     read_char = __get_next_char( f );
+
+                    /*-----------------
+                    Check for newlines
+                    or end of file
+                    -----------------*/
                     if( ( '\n' == read_char ) || ( EOF == read_char ) )
                     {
                         __write_error( SCN_INFINITE_STRING, __cur_line, start_col );
@@ -341,6 +700,11 @@ scanner_error_t8  tokenize
                     }
                 } while( '"' != read_char );
 
+                /*---------------------
+                Only write the token
+                if there wasn't an
+                error
+                ---------------------*/
                 if( !errored )
                 {
                     if( __is_letter( __next_char ) || __is_number( __next_char ) )
@@ -353,6 +717,9 @@ scanner_error_t8  tokenize
                     }
                 }
 
+                /*---------------------
+                Reset the word buffer
+                ---------------------*/
                 cur_idx = 0;
                 word[ cur_idx ] = '\0';
                 break;
@@ -361,11 +728,20 @@ scanner_error_t8  tokenize
                 errored = FALSE;
                 if( __is_number( read_char ) || ( '.' == read_char ) )
                 {
+                    /*-----------------
+                    Read in a numeric
+                    literal
+                    -----------------*/
                     is_float = FALSE;
                     dot_seen = FALSE;
                     start_col = __cur_col;
                     do
                     {
+                        /*-------------
+                        Check if we've
+                        seen multiple
+                        decimal points
+                        -------------*/
                         if( '.' == read_char )
                         {
                             is_float = TRUE;
@@ -379,9 +755,20 @@ scanner_error_t8  tokenize
                             dot_seen = TRUE;
                         }
 
+                        /*-------------
+                        Copy the char
+                        to the word
+                        buffer
+                        -------------*/
                         word[ cur_idx++ ] = read_char;
                         word[ cur_idx ] = '\0';
 
+                        /*-------------
+                        Check if a
+                        letter or a
+                        different symbol
+                        is the next char
+                        -------------*/
                         if( __is_letter( __next_char ) )
                         {
                             __write_error( SCN_INVALID_CONSTANT, __cur_line, __cur_col );
@@ -393,11 +780,20 @@ scanner_error_t8  tokenize
                             break;
                         }
 
+                        /*-------------
+                        Get the next
+                        character
+                        -------------*/
                         read_char = __get_next_char( f );
                     } while( ( ' '  != read_char )
                           && ( '\t' != read_char )
                           && ( '\n' != read_char ) );
 
+                    /*-----------------
+                    Only write the
+                    constant if we
+                    didn't blow up
+                    -----------------*/
                     if( !errored )
                     {
                         if( is_float )
@@ -410,17 +806,39 @@ scanner_error_t8  tokenize
                         }
                     }
 
+                    /*-----------------
+                    Reset the word buf
+                    -----------------*/
                     cur_idx = 0;
                     word[ cur_idx ] = '\0';
                     break;
                 }
                 else if( __is_letter( read_char ) || ( '_' == read_char ) )
                 {
+                    /*-----------------
+                    Read an identifier
+                    from the file
+                    -----------------*/
                     do
                     {
+                        /*-------------
+                        Copy the char
+                        to the word buf
+                        -------------*/
                         word[ cur_idx++ ] = read_char;
                         word[ cur_idx ] = '\0';
-                        if( !__is_letter( __next_char ) && !__is_number( __next_char ) && ( '_' != __next_char ) )
+
+                        /*-------------
+                        If the next char
+                        isn't a letter,
+                        number, or underscore
+                        character, then the
+                        identifier is
+                        done being scanned
+                        -------------*/
+                        if( !__is_letter( __next_char )
+                         && !__is_number( __next_char )
+                         && ( '_' != __next_char      ) )
                         {
                             if( '.' == __next_char )
                             {
@@ -432,12 +850,23 @@ scanner_error_t8  tokenize
                             break;
                         }
 
+                        /*-------------
+                        Grab the next
+                        character
+                        -------------*/
                         read_char = __get_next_char( f );
 
                     } while( ( ' '  != read_char )
                           && ( '\t' != read_char )
                           && ( '\n' != read_char ) );
 
+                    /*-----------------
+                    Add the identifier
+                    to the symbol table
+                    and write the token
+                    only if we haven't
+                    hit an error
+                    -----------------*/
                     if( !errored )
                     {
                         if( TOK_NO_CLASS == is_keyword( word ) )
@@ -453,20 +882,62 @@ scanner_error_t8  tokenize
                         }
                     }
 
+                    /*-----------------
+                    Reset the word buf
+                    -----------------*/
                     cur_idx = 0;
                     word[ cur_idx ] = '\0';
                     break;
                 }
                 else
                 {
+                    /*-----------------
+                    Character isn't in
+                    language
+                    -----------------*/
                     __write_error( SCN_INVALID_OP, __cur_line, __cur_col );
                     break;
                 }
         }
+
+        /*-----------------------------
+        Grab next character from the
+        file
+        -----------------------------*/
         read_char = __get_next_char( f );
      }
 
+    /*---------------------------------
+    Close the file and return
+    ---------------------------------*/
     fclose( f );
     return( SCN_NO_ERROR );
 
 }   /* tokenize() */
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       unload_scanner - "Unload Scanner"
+*
+*   DESCRIPTION:
+*       Tears down the scanner.
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       * Returns SCN_NO_ERROR if there were no
+*         errors
+*
+**************************************************/
+scanner_error_t8 unload_scanner
+(
+    void
+)
+{
+    unload_tables();
+    return( SCN_NO_ERROR );
+
+}   /* unload_scanner() */
