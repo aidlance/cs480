@@ -622,6 +622,12 @@ struct map *create_map
 *       potentially be resized if the load
 *       factor gets large enough.
 *
+*       Providing a positive integer as n results
+*       in the hash map being initialized with n
+*       buckets. If a negative number (or zero) is
+*       provided, then the table will have the default
+*       size of 512 buckets.
+*
 *   RETURNS:
 *       Returns an error code
 *
@@ -644,9 +650,15 @@ struct map *create_map
 **************************************************/
 map_error_code_t8 init_dynamic_map
 (
-    struct map *m       /* map to initialize    */
+    struct map *m,      /* map to initialize    */
+    sint        n       /* size of map          */
 )
 {
+    if( n > 0 )
+    {
+        return( __init_map( m, n, __MAP_TYPE_DYNAMIC ) );
+    }
+
     return( __init_map( m, __INITIAL_SIZE, __MAP_TYPE_DYNAMIC ) );
 
 }   /* init_dynamic_map() */
@@ -661,6 +673,12 @@ map_error_code_t8 init_dynamic_map
 *       This initializes a static map. This map
 *       does not get resized even if the load
 *       factor gets outrageously large.
+*
+*       Providing a positive integer as n results
+*       in the hash map being initialized with n
+*       buckets. If a negative number (or zero) is
+*       provided, then the table will have the default
+*       size of 512 buckets.
 *
 *   RETURNS:
 *       Returns an error code
@@ -678,9 +696,15 @@ map_error_code_t8 init_dynamic_map
 **************************************************/
 map_error_code_t8 init_static_map
 (
-    struct map *m       /* map to initialize    */
+    struct map *m,      /* map to initialize    */
+    sint        n       /* size of the map      */
 )
 {
+    if( n > 0 )
+    {
+        return( __init_map( m, n, __MAP_TYPE_STATIC ) );
+    }
+
     return( __init_map( m, __INITIAL_SIZE, __MAP_TYPE_STATIC ) );
 
 }   /* init_static_map() */
