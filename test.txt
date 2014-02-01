@@ -1,3 +1,29 @@
+[ let [ int i][     float      j       ] while [ < j 5 ] [if < x 3 [stdout "HEllo"]]]
+[inty f jack_butt05 tweedle-dee apples'n'oranges #include <stdio.h> ]
+13.0e0
++13.0
+13e0
+13e+50
+13.0e-5
+13.0e0e-50
+13.0e0--0
+13.0e--0
+13.0.e0
+13.0eee0
+13.0e*8
+13..0
+"llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllfloat int bob
+"hello
+bool t = true
+bool f = false
+string j = 56
+t-bone++56-+56+-56*-78
+[if <45 54 [stdout "grargh"]]
+[ sin true cos false tan 76490.90e50 [:= [^ x 56 ] [/ giraffe my_neck ] __apples _ _AKSJDH _asdf54 5ers]]
+"Hello"+and 5 or 6 not 6
+<=>=!=:==<>
+[<5 6>8 6++6--7+-9*-0]aidan
+
 []
 [
 ]

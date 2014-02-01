@@ -35,6 +35,8 @@ static char     __prev_char = '\0';     /* previous character from input file   
 static char     __next_char = '\0';     /* next character in the input file     */
 static uint32   __cur_col   = 0;        /* current column counter               */
 static uint32   __cur_line  = 0;        /* current line counter                 */
+static uint32   __num_errors= 0;        /* number of encountered scanning errors*/
+static boolean  __space_seen = FALSE;   /* did we encounter a whitespace char?  */
 
 /*-------------------------------------------------
                 FUNCTION PROTOTYPES
@@ -201,21 +203,23 @@ char __get_next_char
     FILE       *f           /* file to process      */
 )
 {
-    /*---------------------------------
-    Loop until we hit a non-whitespace
-    character
-    ---------------------------------*/
-    do
-    {
-        __cur_col++;
-        __prev_char = __cur_char;
-        __cur_char = __next_char;
+    __cur_col++;
+    __prev_char = __cur_char;
+    __cur_char = __next_char;
 
-        if( EOF != __next_char )
-        {
-            __next_char = fgetc( f );
-        }
-    } while( ( ' ' == __cur_char ) || ( '\t' == __cur_char ) );
+    if( ( '\t' == __cur_char ) || ( ' ' == __cur_char ) || ( '\n' == __cur_char ) )
+    {
+        __space_seen = TRUE;
+    }
+    else
+    {
+        __space_seen = FALSE;
+    }
+
+    if( EOF != __next_char )
+    {
+        __next_char = fgetc( f );
+    }
 
     /*---------------------------------
     Update the current line and
@@ -248,6 +252,8 @@ void __write_error
     uint32      err_col     /* column error occurred on */
 )
 {
+    ++__num_errors;
+
     switch( err_code )
     {
         case SCN_INVALID_OP:
@@ -313,7 +319,27 @@ void __write_token
             break;
 
         case TOK_LITERAL:
-            fprintf( stdout, "LITERAL %s\n", lexeme );
+            switch( misc_info )
+            {
+                case TOK_INT_TYPE:
+                    fprintf( stdout, "LITERAL int %s\n", lexeme );
+                    break;
+
+                case TOK_REAL_TYPE:
+                    fprintf( stdout, "LITERAL float %s\n", lexeme );
+                    break;
+
+                case TOK_STRING_TYPE:
+                    fprintf( stdout, "LITERAL string %s\n", lexeme );
+                    break;
+
+                case TOK_BOOL_TYPE:
+                    fprintf( stdout, "LITERAL bool %s\n", lexeme );
+                    break;
+
+                default:
+                    fprintf( stderr, "Invalid generic type code\n" );
+            }
             break;
 
         case TOK_LIST_TYPE:
@@ -330,6 +356,28 @@ void __write_token
     }
 
 }   /* __write_token() */
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       get_total_scanner_errors - "Get Total
+*                                   [Number of]
+*                                   Scanner Errors"
+*
+*   DESCRIPTION:
+*       Returns the total number of scanner
+*       errors
+*
+**************************************************/
+uint32 get_total_scanner_errors
+(
+    void
+)
+{
+    return( __num_errors );
+
+}   /* get_total_scanner_errors() */
 
 
 /**************************************************
@@ -403,10 +451,12 @@ scanner_error_t8  tokenize
     uint32      cur_idx;                /* current index in word buffer */
     boolean     dot_seen;               /* have we already seen a       */
                                         /*  decimal point (in a float)? */
+    boolean     exp_seen;               /* did we see an 'e' in a float?*/
     boolean     errored;                /* did we see a scanning error? */
     FILE       *f;                      /* file pointer                 */
     boolean     is_float;               /* are we processing a float?   */
     char        read_char;              /* character read from file     */
+    boolean     skip;
     uint32      start_col;              /* starting column              */
     struct token_type
                 token;                  /* identifier token to create   */
@@ -425,8 +475,8 @@ scanner_error_t8  tokenize
     Initialize some of the variables
     ---------------------------------*/
     cur_idx    = 0;
-    __cur_col  = 0;
-    __cur_line = 0;
+    __cur_col  = 1;
+    __cur_line = 1;
 
     /*---------------------------------
     Grab the first character from
@@ -436,6 +486,8 @@ scanner_error_t8  tokenize
     read_char = __get_next_char( f );
     while( EOF != read_char )
     {
+        skip = FALSE;
+
         /*-----------------------------
         Check if we have a NULL
         terminator
@@ -486,37 +538,29 @@ scanner_error_t8  tokenize
                 <=, >=, !=, :=) <-- not
                 planned
                 ---------------------*/
-                if( ( '<' == __prev_char    )
-                 && ( ( ' ' != __prev_char  )
-                   || ( '\t' != __prev_char )
-                   || ( '\n' != __prev_char ) ) )
+                if( ( '<' == __prev_char )
+                  && !( __space_seen ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_LE_OPP, word );
                     break;
                 }
-                else if( ( '>' == __prev_char    )
-                      && ( ( ' ' != __prev_char  )
-                        || ( '\t' != __prev_char )
-                        || ( '\n' != __prev_char ) ) )
+                else if( ( '>' == __prev_char )
+                     && !( __space_seen ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_GT_OPP, word );
                     break;
                 }
                 else if( ( ':' == __prev_char  )
-                    && ( ( ' ' != __prev_char  )
-                      || ( '\t' != __prev_char )
-                      || ( '\n' != __prev_char ) ) )
+                     && !( __space_seen ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_ASSN_OPP, word );
                     break;
                 }
-                else if( ( '!' == __prev_char    )
-                      && ( ( ' ' != __prev_char  )
-                        || ( '\t' != __prev_char )
-                        || ( '\n' != __prev_char ) ) )
+                else if( ( '!' == __prev_char )
+                     && !( __space_seen ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_NE_OPP, word );
@@ -669,10 +713,10 @@ scanner_error_t8  tokenize
                         until the string
                         ends
                         -------------*/
-                        while( (' '   != __get_next_char( f ) )
-                            && ( '\t' != __get_next_char( f ) )
-                            && ( '\n' != __get_next_char( f ) )
-                            && ( '"'  != __get_next_char( f ) ) );
+                        do
+                        {
+                            read_char = __get_next_char( f );
+                        } while( !__space_seen && ( '"' != read_char ) );
                         break;
                     }
 
@@ -713,6 +757,8 @@ scanner_error_t8  tokenize
                     }
                     else
                     {
+                        word[ cur_idx++ ] = '"';
+                        word[ cur_idx ]   = '\0';
                         __write_token( TOK_LITERAL, TOK_STRING_TYPE, word );
                     }
                 }
@@ -734,6 +780,7 @@ scanner_error_t8  tokenize
                     -----------------*/
                     is_float = FALSE;
                     dot_seen = FALSE;
+                    exp_seen = FALSE;
                     start_col = __cur_col;
                     do
                     {
@@ -748,11 +795,52 @@ scanner_error_t8  tokenize
                             if( dot_seen )
                             {
                                 __write_error( SCN_INVALID_FLOAT, __cur_line, __cur_col );
+                                /*---------------
+                                Read until we
+                                get to the next
+                                token
+                                ---------------*/
+                                while( !( __space_seen )
+                                     && ( __is_number( __next_char )
+                                       || __is_letter( __next_char )
+                                       || ( '.' == __next_char ) ) )
+                                {
+                                    read_char = __get_next_char( f );
+                                }
                                 errored = TRUE;
                                 break;
                             }
 
                             dot_seen = TRUE;
+                        }
+
+                        if( ( 'e' == read_char ) || ( 'E' == read_char ) )
+                        {
+                            is_float = TRUE;
+                            if( exp_seen )
+                            {
+                                __write_error( SCN_INVALID_FLOAT, __cur_line, start_col );
+                                while( !( __space_seen )
+                                     && ( __is_number( __next_char )
+                                       || __is_letter( __next_char )
+                                       || ( '.' == __next_char ) ) )
+                                {
+                                    read_char = __get_next_char( f );
+                                }
+
+                                errored = TRUE;
+                                break;
+                            }
+
+                            exp_seen = TRUE;
+                        }
+
+                        if( ( ( '+' == __cur_char ) || ( '-' == __cur_char ) )
+                          && !( __is_letter( __next_char ) )
+                          && !( __is_number( __next_char ) ) )
+                        {
+                            skip = TRUE;
+                            break;
                         }
 
                         /*-------------
@@ -769,13 +857,38 @@ scanner_error_t8  tokenize
                         different symbol
                         is the next char
                         -------------*/
-                        if( __is_letter( __next_char ) )
+                        if( __is_letter( __next_char )
+                            && ( __next_char != 'e' )
+                            && ( __next_char != 'E' ) )
                         {
                             __write_error( SCN_INVALID_CONSTANT, __cur_line, __cur_col );
+                            /*-------------------
+                            Read until we get to
+                            the next token
+                            -------------------*/
+                            while( !( __space_seen )
+                                 && ( __is_number( __next_char )
+                                   || __is_letter( __next_char )
+                                   || ( '.' == __next_char ) ) )
+                                {
+                                    read_char = __get_next_char( f );
+                                }
                             errored = TRUE;
                             break;
                         }
-                        else if( !__is_number( __next_char ) && ( '.' != __next_char ) )
+                        else if( ( ( '+' == __next_char )
+                                || ( '-' == __next_char ) )
+                              && ( 'e' != __cur_char  )
+                              && ( 'E' != __cur_char  ) )
+                        {
+                            break;
+                        }
+                        else if( !__is_number( __next_char )
+                            && ( '.' != __next_char )
+                            && ( __next_char != 'e' )
+                            && ( __next_char != 'E' )
+                            && ( __next_char != '+' )
+                            && ( __next_char != '-' ) )
                         {
                             break;
                         }
@@ -785,9 +898,7 @@ scanner_error_t8  tokenize
                         character
                         -------------*/
                         read_char = __get_next_char( f );
-                    } while( ( ' '  != read_char )
-                          && ( '\t' != read_char )
-                          && ( '\n' != read_char ) );
+                    } while( !__space_seen );
 
                     /*-----------------
                     Only write the
@@ -843,6 +954,19 @@ scanner_error_t8  tokenize
                             if( '.' == __next_char )
                             {
                                 __write_error( SCN_INVALID_IDENTIFIER, __cur_line, __cur_col + 1 );
+                                /*-------------
+                                Grab all chars
+                                until the
+                                identifier str
+                                ends
+                                -------------*/
+                                while( !( __space_seen )
+                                     && ( __is_number( __next_char )
+                                       || __is_letter( __next_char )
+                                       || ( '.' == __next_char ) ) )
+                                {
+                                    read_char = __get_next_char( f );
+                                }
                                 errored = TRUE;
                                 break;
                             }
@@ -856,9 +980,7 @@ scanner_error_t8  tokenize
                         -------------*/
                         read_char = __get_next_char( f );
 
-                    } while( ( ' '  != read_char )
-                          && ( '\t' != read_char )
-                          && ( '\n' != read_char ) );
+                    } while( !__space_seen );
 
                     /*-----------------
                     Add the identifier
@@ -904,7 +1026,10 @@ scanner_error_t8  tokenize
         Grab next character from the
         file
         -----------------------------*/
-        read_char = __get_next_char( f );
+        if( !skip )
+        {
+            read_char = __get_next_char( f );
+        }
      }
 
     /*---------------------------------

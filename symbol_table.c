@@ -61,7 +61,7 @@ const struct __reserved_symbol __keywords[] =
     { "if",     { TOK_RESERVED_WORD, { TOK_IF,         "if",     "if"     } } },
     { "false",  { TOK_RESERVED_WORD, { TOK_FALSE,      "false",  "false"  } } },
     { "int",    { TOK_RESERVED_WORD, { TOK_INT,        "int",    ""       } } },
-    { "real",   { TOK_RESERVED_WORD, { TOK_REAL,       "real",   ""       } } },
+    { "float",  { TOK_RESERVED_WORD, { TOK_REAL,       "float",  ""       } } },
     { "bool",   { TOK_RESERVED_WORD, { TOK_BOOL,       "bool",   ""       } } },
     { "string", { TOK_RESERVED_WORD, { TOK_STRING,     "string", ""       } } },
     { "and",    { TOK_BINARY_OPP,    { TOK_AND_OPP,    "and",    "and"    } } },

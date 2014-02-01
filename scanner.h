@@ -39,6 +39,11 @@ enum
                   FUNCTION PROTOTYPES
 -------------------------------------------------*/
 
+uint32 get_total_scanner_errors
+(
+    void
+);
+
 scanner_error_t8 init_scanner
 (
     void
