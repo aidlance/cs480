@@ -21,7 +21,7 @@
                                      LITERAL CONSTANTS
 ------------------------------------------------------------------------------------------*/
 #define FILENAME_IDX 1
-#define __CODEBLOCKS_TEST
+//#define __CODEBLOCKS_TEST
 
 /*------------------------------------------------------------------------------------------
                                       PROCEDURES
@@ -44,7 +44,10 @@ int main( int argc, char **argv )
 #endif
 
     printf( "\nThere were %lu scanning errors.\n", get_total_scanner_errors() );
+    
+#ifdef __CODEBLOCKS_TEST
     scanf("%i", &grr);
+#endif
     unload_scanner();
     return( 0 );
 

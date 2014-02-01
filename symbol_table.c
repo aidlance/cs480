@@ -52,7 +52,7 @@ and the corresponding token values.
 TODO: Fill the out_str fieds with
       Gforth output
 -------------------------------------*/
-const struct __reserved_symbol __keywords[] =
+static struct __reserved_symbol __keywords[] =
 {
     { "while",  { TOK_RESERVED_WORD, { TOK_WHILE,      "while",  "while"  } } },
     { "let",    { TOK_RESERVED_WORD, { TOK_LET,        "let",    "let"    } } },
