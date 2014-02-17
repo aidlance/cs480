@@ -35,13 +35,15 @@ Token error types
 typedef sint8 token_error_t8;
 enum
 {
-    TOK_NO_ERROR  =  0,         /* No error                                     */
-    TOK_NOT_VALID = -1          /* error for invalid token                      */
+    TOK_NO_ERROR      =  0,     /* No error                                     */
+    TOK_INVALID_TOKEN = -1,     /* error for invalid token                      */
+    TOK_NULL_REF      = -2      /* null reference error                         */
 };
 
 /*-------------------------------------
-Token error types
+Token list types
 -------------------------------------*/
+typedef uint8 list_class_t8;
 enum
 {
     TOK_LIST_BEGIN = 0,         /* Beginning of list                            */
@@ -61,6 +63,7 @@ enum
     TOK_IDENT,                  /* identifier token class type                  */
     TOK_RESERVED_WORD,          /* reserved word token class type               */
     TOK_LIST_TYPE,              /* list character                               */
+    TOK_ASSN_CLASS,             /* assignment statement                         */
     TOK_NUM_TOKEN_TYPES         /* number of token classes                      */
 };
 
@@ -184,7 +187,7 @@ struct reserved_word_type
 };
 
 /*-------------------------------------
-Token type
+Token types
 -------------------------------------*/
 struct token_type
 {
@@ -198,5 +201,33 @@ struct token_type
     };
 
 };
+
+typedef struct minimal_token
+{
+    token_class_t8 tok_class;
+    union
+    {
+        bin_opp_class_t8    binop;
+        unary_opp_class_t8  unop;
+        type_class_t8       type;
+        res_word_class_t8   stmt;
+        list_class_t8       list;
+    };
+
+    union
+    {
+        uint32              table_hndl;
+        char               *literal_str;
+    };
+} Token;
+
+/*-------------------------------------------------
+                 FUNCTION PROTOTYPES
+-------------------------------------------------*/
+
+token_error_t8 print_minimal_token
+(
+    Token *tok
+);
 
 #endif // __AIDAN_TOKENS_H__

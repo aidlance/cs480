@@ -15,6 +15,8 @@
                  PROJECT INCLUDES
 -------------------------------------------------*/
 
+
+#include "tokens.h"
 #include "types.h"
 
 /*-------------------------------------------------
@@ -32,7 +34,11 @@ enum
     SCN_INVALID_CONSTANT   = -5,    /* invalid constant error   */
     SCN_INVALID_FLOAT      = -6,    /* multiple '.' in a float  */
     SCN_INVALID_IDENTIFIER = -7,    /* invalid identifier       */
-    SCN_INIT_ERROR         = -8     /* initialization error     */
+    SCN_INIT_ERROR         = -8,    /* initialization error     */
+    SCN_TOKEN_INVALID      = -9,    /* invalid token error      */
+    SCN_FILE_END_REACHED   = -10,   /* reached file EOF         */
+    SCN_INVALID_TOKEN      = -11,   /* invalid token error      */
+    SCN_NULL_REF           = -12    /* null reference error     */
 };
 
 /*-------------------------------------------------
@@ -49,12 +55,22 @@ scanner_error_t8 init_scanner
     void
 );
 
-scanner_error_t8  tokenize
+scanner_error_t8 load_scanner_file
 (
-    char       *file_name   /* file to scan     */
+    char       *file_name   /* file to open     */
+);
+
+scanner_error_t8  read_next_token
+(
+    Token      *tok         /* Read token       */
 );
 
 scanner_error_t8 unload_scanner
+(
+    void
+);
+
+scanner_error_t8 unload_scanner_file
 (
     void
 );

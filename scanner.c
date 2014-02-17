@@ -13,6 +13,7 @@
 -------------------------------------------------*/
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "scanner.h"
@@ -26,6 +27,8 @@
 
 #define __MAX_WORD_LEN 255              /* maximum length allowed in a word     */
 
+//#define __DEBUG_PRINTS
+
 /*-------------------------------------------------
                 GLOBAL VARIABLES
 -------------------------------------------------*/
@@ -37,6 +40,7 @@ static uint32   __cur_col   = 0;        /* current column counter               
 static uint32   __cur_line  = 0;        /* current line counter                 */
 static uint32   __num_errors= 0;        /* number of encountered scanning errors*/
 static boolean  __space_seen = FALSE;   /* did we encounter a whitespace char?  */
+static FILE    *__current_file = NULL;  /* current file to scan                 */
 
 /*-------------------------------------------------
                 FUNCTION PROTOTYPES
@@ -64,7 +68,7 @@ inline boolean __is_upper
 
 char __get_next_char
 (
-    FILE       *f           /* file to process      */
+    void
 );
 
 void __write_error
@@ -200,9 +204,14 @@ inline boolean __is_upper
 **************************************************/
 char __get_next_char
 (
-    FILE       *f           /* file to process      */
+    void
 )
 {
+    if( __current_file == NULL )
+    {
+        return( '\0' );
+    }
+
     __cur_col++;
     __prev_char = __cur_char;
     __cur_char = __next_char;
@@ -218,7 +227,7 @@ char __get_next_char
 
     if( EOF != __next_char )
     {
-        __next_char = fgetc( f );
+        __next_char = fgetc( __current_file );
     }
 
     /*---------------------------------
@@ -304,6 +313,7 @@ void __write_token
     char       *lexeme      /* lexeme to print      */
 )
 {
+#ifdef __DEBUG_PRINTS
     switch( token_class )
     {
         case TOK_BINARY_OPP:
@@ -354,6 +364,7 @@ void __write_token
             fprintf( stderr, "Unknown token class.\n" );
             break;
     }
+#endif
 
 }   /* __write_token() */
 
@@ -421,11 +432,56 @@ scanner_error_t8 init_scanner
 /**************************************************
 *
 *   FUNCTION:
-*       tokenize - "Tokenize"
+*       load_scanner_file - "Load Scanner File"
+*
+*   DESCIPTION:
+*       Loads a file for the lexical scanner
+*       to analyze
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       * This function returns SCN_NO_ERROR
+*         if there were no errors
+*       * This function returns SCN_OPEN_ERROR
+*         if there were any errors opening
+*         the file
+*
+**************************************************/
+scanner_error_t8 load_scanner_file
+(
+    char       *file_name   /* file to open     */
+)
+{
+    if( NULL != __current_file )
+    {
+        return( SCN_OPEN_ERROR );
+    }
+
+    __current_file = fopen( file_name, "r" );
+    if( NULL == __current_file )
+    {
+        return( SCN_OPEN_ERROR );
+    }
+
+    __num_errors = 0;
+    __space_seen = FALSE;
+    __cur_col    = 1;
+    __cur_line   = 1;
+
+    return( SCN_NO_ERROR );
+
+}   /* load_scanner_file() */
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       read_next_token - "Read Next Token"
 *
 *   DESCRIPTION:
-*       Tokenizes a file. All of the proccessed
-*       tokens are written to stdout.
+*       Grabs a token from the loaded file
 *
 *   RETURNS:
 *       Returns an error code
@@ -433,16 +489,16 @@ scanner_error_t8 init_scanner
 *   ERRORS:
 *       * Returns SCN_NO_ERROR if there were
 *         no errors
-*       * Returns SCN_OPEN_ERROR if there was
-*         an issue opening a file
+*       * Returns SCN_INVALID_TOKEN if the
+*         token read was invalid
 *
 *   TODO:
 *       CLEAN THIS UP!
 *
 **************************************************/
-scanner_error_t8  tokenize
+scanner_error_t8  read_next_token
 (
-    char       *file_name   /* file to scan     */
+    Token      *tok         /* read token           */
 )
 {
     /*---------------------------------
@@ -453,7 +509,6 @@ scanner_error_t8  tokenize
                                         /*  decimal point (in a float)? */
     boolean     exp_seen;               /* did we see an 'e' in a float?*/
     boolean     errored;                /* did we see a scanning error? */
-    FILE       *f;                      /* file pointer                 */
     boolean     is_float;               /* are we processing a float?   */
     char        read_char;              /* character read from file     */
     boolean     skip;
@@ -462,28 +517,24 @@ scanner_error_t8  tokenize
                 token;                  /* identifier token to create   */
     char        word[ __MAX_WORD_LEN ]; /* word buffer                  */
 
-    /*---------------------------------
-    Attempt to open the file
-    ---------------------------------*/
-    f = fopen( file_name, "r" );
-    if( NULL == f )
+    if( NULL == __current_file )
     {
         return( SCN_OPEN_ERROR );
     }
 
-    /*---------------------------------
-    Initialize some of the variables
-    ---------------------------------*/
-    cur_idx    = 0;
-    __cur_col  = 1;
-    __cur_line = 1;
+    if( NULL == tok )
+    {
+        return( SCN_NULL_REF );
+    }
+
+    memset( tok, 0, sizeof( *tok ) );
 
     /*---------------------------------
     Grab the first character from
     the file and continue to read
     until the end of file is reached
     ---------------------------------*/
-    read_char = __get_next_char( f );
+    read_char = __get_next_char();
     while( EOF != read_char )
     {
         skip = FALSE;
@@ -494,7 +545,7 @@ scanner_error_t8  tokenize
         -----------------------------*/
         if( '\0' == read_char )
         {
-            read_char = __get_next_char( f );
+            read_char = __get_next_char();
             continue;
         }
 
@@ -527,7 +578,10 @@ scanner_error_t8  tokenize
                 ---------------------*/
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_LT_OPP, word );
-                break;
+                tok->tok_class  = TOK_BINARY_OPP;
+                tok->binop      = TOK_LT_OPP;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case '=':
                 /*---------------------
@@ -543,33 +597,48 @@ scanner_error_t8  tokenize
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_LE_OPP, word );
-                    break;
+                    tok->tok_class  = TOK_BINARY_OPP;
+                    tok->binop      = TOK_LE_OPP;
+                    tok->table_hndl = 0;
+                    return( SCN_NO_ERROR );
                 }
                 else if( ( '>' == __prev_char )
                      && !( __space_seen ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
-                    __write_token( TOK_BINARY_OPP, TOK_GT_OPP, word );
-                    break;
+                    __write_token( TOK_BINARY_OPP, TOK_GE_OPP, word );
+                    tok->tok_class  = TOK_BINARY_OPP;
+                    tok->binop      = TOK_GE_OPP;
+                    tok->table_hndl = 0;
+                    return( SCN_NO_ERROR );
                 }
                 else if( ( ':' == __prev_char  )
                      && !( __space_seen ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_ASSN_OPP, word );
-                    break;
+                    tok->tok_class  = TOK_ASSN_CLASS;
+                    tok->binop      = TOK_ASSN_OPP;
+                    tok->table_hndl = 0;
+                    return( SCN_NO_ERROR );
                 }
                 else if( ( '!' == __prev_char )
                      && !( __space_seen ) )
                 {
                     sprintf( word, "%c%c", __prev_char, __cur_char );
                     __write_token( TOK_BINARY_OPP, TOK_NE_OPP, word );
-                    break;
+                    tok->tok_class  = TOK_BINARY_OPP;
+                    tok->binop      = TOK_NE_OPP;
+                    tok->table_hndl = 0;
+                    return( SCN_NO_ERROR );
                 }
 
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_EQ_OPP, word );
-                break;
+                tok->tok_class  = TOK_BINARY_OPP;
+                tok->binop      = TOK_EQ_OPP;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case '>':
                 /*---------------------
@@ -583,7 +652,10 @@ scanner_error_t8  tokenize
 
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_GT_OPP, word );
-                break;
+                tok->tok_class  = TOK_BINARY_OPP;
+                tok->binop      = TOK_LT_OPP;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case '!':
                 /*---------------------
@@ -596,17 +668,23 @@ scanner_error_t8  tokenize
                 }
 
                 __write_error( SCN_INVALID_OP, __cur_line, __cur_col );
-                break;
+                return( SCN_INVALID_TOKEN );
 
             case '%':
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_MOD_OPP, word );
-                break;
+                tok->tok_class  = TOK_BINARY_OPP;
+                tok->binop      = TOK_MOD_OPP;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case '^':
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_EXP_OPP, word );
-                break;
+                tok->tok_class  = TOK_BINARY_OPP;
+                tok->binop      = TOK_EXP_OPP;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case '-':
                 /*---------------------
@@ -619,12 +697,18 @@ scanner_error_t8  tokenize
                 {
                     sprintf( word, "%c", __cur_char );
                     __write_token( TOK_UNARY_OPP, TOK_NEG_OPP, word );
-                    break;
+                    tok->tok_class  = TOK_UNARY_OPP;
+                    tok->unop       = TOK_NEG_OPP;
+                    tok->table_hndl = 0;
+                    return( SCN_NO_ERROR );
                 }
 
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_SUB_OPP, word );
-                break;
+                tok->tok_class  = TOK_BINARY_OPP;
+                tok->binop      = TOK_SUB_OPP;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case '+':
                 /*---------------------
@@ -637,32 +721,50 @@ scanner_error_t8  tokenize
                 {
                     sprintf( word, "%c", __cur_char );
                     __write_token( TOK_UNARY_OPP, TOK_POS_OPP, word );
-                    break;
+                    tok->tok_class  = TOK_UNARY_OPP;
+                    tok->binop      = TOK_POS_OPP;
+                    tok->table_hndl = 0;
+                    return( SCN_NO_ERROR );
                 }
 
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_ADD_OPP, word );
-                break;
+                tok->tok_class  = TOK_BINARY_OPP;
+                tok->binop      = TOK_ADD_OPP;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case '*':
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_MUL_OPP, word );
-                break;
+                tok->tok_class  = TOK_BINARY_OPP;
+                tok->binop      = TOK_MUL_OPP;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case '/':
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_DIV_OPP, word );
-                break;
+                tok->tok_class  = TOK_BINARY_OPP;
+                tok->binop      = TOK_DIV_OPP;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case '[':
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_LIST_TYPE, TOK_LIST_BEGIN, word );
-                break;
+                tok->tok_class  = TOK_LIST_TYPE;
+                tok->binop      = TOK_LIST_BEGIN;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case ']':
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_LIST_TYPE, TOK_LIST_END, word );
-                break;
+                tok->tok_class  = TOK_LIST_TYPE;
+                tok->binop      = TOK_LIST_END;
+                tok->table_hndl = 0;
+                return( SCN_NO_ERROR );
 
             case ':':
                 /*---------------------
@@ -677,7 +779,8 @@ scanner_error_t8  tokenize
                 }
 
                 __write_error( SCN_INVALID_OP, __cur_line, __cur_col );
-                break;
+                return( SCN_INVALID_TOKEN );
+
             case ' ':
             case '\t':
             case '\n':
@@ -715,9 +818,9 @@ scanner_error_t8  tokenize
                         -------------*/
                         do
                         {
-                            read_char = __get_next_char( f );
+                            read_char = __get_next_char();
                         } while( !__space_seen && ( '"' != read_char ) );
-                        break;
+                        return( SCN_INVALID_TOKEN );
                     }
 
                     /*-----------------
@@ -730,7 +833,7 @@ scanner_error_t8  tokenize
                     /*-----------------
                     Get the next char
                     -----------------*/
-                    read_char = __get_next_char( f );
+                    read_char = __get_next_char();
 
                     /*-----------------
                     Check for newlines
@@ -740,7 +843,7 @@ scanner_error_t8  tokenize
                     {
                         __write_error( SCN_INFINITE_STRING, __cur_line, start_col );
                         errored = TRUE;
-                        break;
+                        return( SCN_INVALID_TOKEN );
                     }
                 } while( '"' != read_char );
 
@@ -754,12 +857,18 @@ scanner_error_t8  tokenize
                     if( __is_letter( __next_char ) || __is_number( __next_char ) )
                     {
                         __write_error( SCN_INVALID_CONSTANT, __cur_line, start_col );
+                        return( SCN_INVALID_TOKEN );
                     }
                     else
                     {
                         word[ cur_idx++ ] = '"';
                         word[ cur_idx ]   = '\0';
                         __write_token( TOK_LITERAL, TOK_STRING_TYPE, word );
+                        tok->tok_class   = TOK_LITERAL;
+                        tok->type        = TOK_STRING_TYPE;
+                        tok->literal_str = malloc( sizeof( char ) * ( strlen( word ) + 1 ) );
+                        sprintf( tok->literal_str, "%s", word );
+                        return( SCN_NO_ERROR );
                     }
                 }
 
@@ -774,6 +883,11 @@ scanner_error_t8  tokenize
                 errored = FALSE;
                 if( __is_number( read_char ) || ( '.' == read_char ) )
                 {
+                    if( ( '.' == read_char ) && !( __is_number( __next_char ) ) )
+                    {
+                        return( SCN_INVALID_TOKEN );
+                    }
+
                     /*-----------------
                     Read in a numeric
                     literal
@@ -805,10 +919,10 @@ scanner_error_t8  tokenize
                                        || __is_letter( __next_char )
                                        || ( '.' == __next_char ) ) )
                                 {
-                                    read_char = __get_next_char( f );
+                                    read_char = __get_next_char();
                                 }
                                 errored = TRUE;
-                                break;
+                                return( SCN_INVALID_TOKEN );
                             }
 
                             dot_seen = TRUE;
@@ -825,11 +939,11 @@ scanner_error_t8  tokenize
                                        || __is_letter( __next_char )
                                        || ( '.' == __next_char ) ) )
                                 {
-                                    read_char = __get_next_char( f );
+                                    read_char = __get_next_char();
                                 }
 
                                 errored = TRUE;
-                                break;
+                                return( SCN_INVALID_TOKEN );
                             }
 
                             exp_seen = TRUE;
@@ -861,19 +975,6 @@ scanner_error_t8  tokenize
                             && ( __next_char != 'e' )
                             && ( __next_char != 'E' ) )
                         {
-                            __write_error( SCN_INVALID_CONSTANT, __cur_line, __cur_col );
-                            /*-------------------
-                            Read until we get to
-                            the next token
-                            -------------------*/
-                            while( !( __space_seen )
-                                 && ( __is_number( __next_char )
-                                   || __is_letter( __next_char )
-                                   || ( '.' == __next_char ) ) )
-                                {
-                                    read_char = __get_next_char( f );
-                                }
-                            errored = TRUE;
                             break;
                         }
                         else if( ( ( '+' == __next_char )
@@ -897,7 +998,7 @@ scanner_error_t8  tokenize
                         Get the next
                         character
                         -------------*/
-                        read_char = __get_next_char( f );
+                        read_char = __get_next_char();
                     } while( !__space_seen );
 
                     /*-----------------
@@ -910,10 +1011,21 @@ scanner_error_t8  tokenize
                         if( is_float )
                         {
                             __write_token( TOK_LITERAL, TOK_REAL_TYPE, word );
+                            tok->literal_str = malloc( sizeof( char ) * strlen( word ) );
+                            strcpy( tok->literal_str, word );
+                            tok->tok_class  = TOK_LITERAL;
+                            tok->binop      = TOK_REAL_TYPE;
+                            return( SCN_NO_ERROR );
+
                         }
                         else
                         {
                             __write_token( TOK_LITERAL, TOK_INT_TYPE, word );
+                            tok->literal_str = malloc( sizeof( char ) * strlen( word ) );
+                            strcpy( tok->literal_str, word );
+                            tok->tok_class  = TOK_LITERAL;
+                            tok->binop      = TOK_INT_TYPE;
+                            return( SCN_NO_ERROR );
                         }
                     }
 
@@ -951,26 +1063,6 @@ scanner_error_t8  tokenize
                          && !__is_number( __next_char )
                          && ( '_' != __next_char      ) )
                         {
-                            if( '.' == __next_char )
-                            {
-                                __write_error( SCN_INVALID_IDENTIFIER, __cur_line, __cur_col + 1 );
-                                /*-------------
-                                Grab all chars
-                                until the
-                                identifier str
-                                ends
-                                -------------*/
-                                while( !( __space_seen )
-                                     && ( __is_number( __next_char )
-                                       || __is_letter( __next_char )
-                                       || ( '.' == __next_char ) ) )
-                                {
-                                    read_char = __get_next_char( f );
-                                }
-                                errored = TRUE;
-                                break;
-                            }
-
                             break;
                         }
 
@@ -978,7 +1070,7 @@ scanner_error_t8  tokenize
                         Grab the next
                         character
                         -------------*/
-                        read_char = __get_next_char( f );
+                        read_char = __get_next_char();
 
                     } while( !__space_seen );
 
@@ -997,10 +1089,25 @@ scanner_error_t8  tokenize
                             strcpy( token.id.in_str, word );
                             update_symbol_table( word, &token );
                             __write_token( TOK_IDENT, -1, word );
+                            tok->tok_class  = TOK_IDENT;
+                            tok->table_hndl = (uint32)get_token_data( word );
+                            return( SCN_NO_ERROR );
                         }
                         else
                         {
+                            if( ( 0 == strcmp( word, "true" ) ) || ( 0 == strcmp( word, "false" ) ) )
+                            {
+                                tok->tok_class = TOK_LITERAL;
+                                tok->type = TOK_BOOL_TYPE;
+                                tok->literal_str = (char *)malloc( sizeof( char ) * strlen( word ) );
+                                strcpy( tok->literal_str, word );
+                                return( SCN_NO_ERROR );
+                            }
                             __write_token( TOK_RESERVED_WORD, -1, word );
+                            tok->table_hndl = (uint32)get_token_data( word );
+                            tok->tok_class  = ( (struct token_type *)( tok->table_hndl ) )->token_class;
+                            tok->stmt       = ( (struct token_type *)( tok->table_hndl ) )->res_word.word_class;
+                            return( SCN_NO_ERROR );
                         }
                     }
 
@@ -1018,6 +1125,7 @@ scanner_error_t8  tokenize
                     language
                     -----------------*/
                     __write_error( SCN_INVALID_OP, __cur_line, __cur_col );
+                    return( SCN_INVALID_TOKEN );
                     break;
                 }
         }
@@ -1028,15 +1136,14 @@ scanner_error_t8  tokenize
         -----------------------------*/
         if( !skip )
         {
-            read_char = __get_next_char( f );
+            read_char = __get_next_char();
         }
      }
 
     /*---------------------------------
     Close the file and return
     ---------------------------------*/
-    fclose( f );
-    return( SCN_NO_ERROR );
+    return( SCN_FILE_END_REACHED );
 
 }   /* tokenize() */
 
@@ -1063,6 +1170,44 @@ scanner_error_t8 unload_scanner
 )
 {
     unload_tables();
+    unload_scanner_file();
     return( SCN_NO_ERROR );
 
 }   /* unload_scanner() */
+
+
+/**************************************************
+*
+*   FUNCTION:
+*       unload_scanner_file - "Unload Scanner File"
+*
+*   DESCRIPTION:
+*       Unloads the current file being analyzed
+*       by the scanner.
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       * Returns SCN_NO_ERROR if there were
+*         no errors
+*
+**************************************************/
+scanner_error_t8 unload_scanner_file
+(
+    void
+)
+{
+    if( NULL == __current_file )
+    {
+        return( SCN_NO_ERROR );
+    }
+
+    fclose( __current_file );
+    __current_file = NULL;
+    __cur_char     = '\0';
+    __prev_char    = '\0';
+    __next_char    = '\0';
+    return( SCN_NO_ERROR );
+
+}   /* unload_scanner_file() */
