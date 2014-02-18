@@ -21,7 +21,7 @@
                                      LITERAL CONSTANTS
 ------------------------------------------------------------------------------------------*/
 #define FILENAME_IDX 1
-#define __CODEBLOCKS_TEST
+//#define __CODEBLOCKS_TEST
 
 /*------------------------------------------------------------------------------------------
                                       PROCEDURES
@@ -127,11 +127,11 @@ int main( int argc, char **argv )
     if( argc > 1 )
     {
         for( grr = 1; grr < argc; ++grr )
-        {
-            if( '-' != *argv )
+        {            
+            if( '-' != argv[grr][0] )
             {
                 for( i = 0; i < 32; ++i ) printf( "-" );
-                printf("\nFile: %s\n");
+                printf("\nFile: %s\n", argv[ grr ] );
                 for( i = 0; i < 32; ++i ) printf( "-" );
                 printf("\n");
                 if( PARSER_NO_ERROR != load_file( argv[ grr ] ) )
