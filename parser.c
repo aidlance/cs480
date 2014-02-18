@@ -505,9 +505,8 @@ void __free_parse_tree_nodes
 {
     Link       *cur;    /* current node link    */
     Link       *prev;   /* previous node link   */
-    
-    
-            /*---------------------------------
+
+    /*---------------------------------
     Check for NULL node pointer
     (base case)
     ---------------------------------*/
