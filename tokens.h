@@ -110,10 +110,11 @@ enum
 /*-------------------------------------
 Primitive type classes
 -------------------------------------*/
-typedef uint8 type_class_t8;
+typedef sint8 type_class_t8;
 enum
 {
-    TOK_INT_TYPE = 0,           /* integer type ("int")                 */
+    TOK_NO_TYPE  = -1,          /* uninitialized type                   */
+    TOK_INT_TYPE =  0,          /* integer type ("int")                 */
     TOK_REAL_TYPE,              /* float/double type ("real")           */
     TOK_STRING_TYPE,            /* string type ("string")               */
     TOK_BOOL_TYPE,              /* boolean type ("bool")                */

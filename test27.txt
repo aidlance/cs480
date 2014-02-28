@@ -1,0 +1,1 @@
+[[stdout [and true false]]]

@@ -1,0 +1,1 @@
+[[stdout [cos true]]]

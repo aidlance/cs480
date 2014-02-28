@@ -1,1 +1,1 @@
-[[let[[int t]]]]
+[[stdout [sin 30]][stdout [sin 30.]][stdout [tan 30]][stdout [tan 30.e]][stdout [cos 30]][stdout[cos 30.0]]]

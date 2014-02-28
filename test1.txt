@@ -1,1 +1,1 @@
-[[while x true]]
+[[stdout[+ 4 6]]]

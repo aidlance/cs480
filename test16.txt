@@ -1,1 +1,1 @@
-[[let[[x int][y float][s string]]]]
+[[let [[x string]]][:=x"Hello world!"][stdout x]]

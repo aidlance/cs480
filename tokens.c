@@ -33,7 +33,7 @@ token_error_t8 print_minimal_token
                     fprintf( stdout, "BINOP (^)\n" );
                     break;
                 case TOK_MOD_OPP:
-                    fprintf( stdout, "BINOP (\%)\n" );
+                    fprintf( stdout, "BINOP (%c)\n", '%' );
                     break;
                 case TOK_AND_OPP:
                     fprintf( stdout, "BINOP (and)\n" );

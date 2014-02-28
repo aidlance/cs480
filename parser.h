@@ -16,6 +16,7 @@
 -------------------------------------------------*/
 
 #include "types.h"
+#include "tokens.h"
 
 /*-------------------------------------------------
                   LITERAL CONSTANTS
@@ -40,6 +41,30 @@ enum
                         TYPES
 -------------------------------------------------*/
 
+struct __parser_tree_type;
+struct __parser_tree_node_type;
+struct __parser_node_linked_list_link_type;
+
+typedef struct __parser_node_linked_list_link_type
+{
+    struct __parser_node_linked_list_link_type *next;       /* pointer to next link     */
+    struct __parser_tree_node_type             *tree_next;  /* pointer to child node    */
+} Link;
+
+typedef struct __parser_tree_node_type
+{
+    Link               *first_child;    /* node's last child        */
+    Link               *last_child;     /* node's first child       */
+    uint32              num_children;   /* number of children       */
+    Token               tok;            /* node's token data        */
+} Node;
+
+typedef struct __parser_tree_type
+{
+    Node       *top;        /* top of the tree          */
+    uint32      size;       /* size of the tree-not used*/
+} Tree;
+
 /*-------------------------------------------------
                   VARIABLE CONSTANTS
 -------------------------------------------------*/
@@ -51,6 +76,16 @@ enum
 /*-------------------------------------------------
                       PROCEDURES
 -------------------------------------------------*/
+
+//parser_error_t8 gen_code
+//(
+//    void
+//);
+
+Tree *get_parse_tree
+(
+    void
+);
 
 parser_error_t8 init_parser
 (

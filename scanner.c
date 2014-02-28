@@ -41,6 +41,7 @@ static uint32   __cur_line  = 0;        /* current line counter                 
 static uint32   __num_errors= 0;        /* number of encountered scanning errors*/
 static boolean  __space_seen = FALSE;   /* did we encounter a whitespace char?  */
 static FILE    *__current_file = NULL;  /* current file to scan                 */
+static boolean  __skip         = FALSE;
 
 /*-------------------------------------------------
                 FUNCTION PROTOTYPES
@@ -210,6 +211,12 @@ char __get_next_char
     if( __current_file == NULL )
     {
         return( '\0' );
+    }
+
+    if( __skip )
+    {
+        __skip = FALSE;
+        return( __cur_char );
     }
 
     __cur_col++;
@@ -653,7 +660,7 @@ scanner_error_t8  read_next_token
                 sprintf( word, "%c", __cur_char );
                 __write_token( TOK_BINARY_OPP, TOK_GT_OPP, word );
                 tok->tok_class  = TOK_BINARY_OPP;
-                tok->binop      = TOK_LT_OPP;
+                tok->binop      = TOK_GT_OPP;
                 tok->table_hndl = 0;
                 return( SCN_NO_ERROR );
 
@@ -790,6 +797,22 @@ scanner_error_t8  read_next_token
                 break;
 
             case '"':
+                /*-----------------
+                Get the next char
+                -----------------*/
+                read_char = __get_next_char();
+
+                /*-----------------
+                Check for newlines
+                or end of file
+                -----------------*/
+                if( ( '\n' == read_char ) || ( EOF == read_char ) )
+                {
+                    __write_error( SCN_INFINITE_STRING, __cur_line, start_col );
+                    errored = TRUE;
+                    return( SCN_INVALID_TOKEN );
+                }
+
                 /*---------------------
                 If a string symbol is
                 encountered, read from
@@ -803,6 +826,7 @@ scanner_error_t8  read_next_token
                 errored = FALSE;
                 do
                 {
+
                     /*-----------------
                     Check for buffer
                     overflow
@@ -861,7 +885,6 @@ scanner_error_t8  read_next_token
                     }
                     else
                     {
-                        word[ cur_idx++ ] = '"';
                         word[ cur_idx ]   = '\0';
                         __write_token( TOK_LITERAL, TOK_STRING_TYPE, word );
                         tok->tok_class   = TOK_LITERAL;
@@ -908,23 +931,9 @@ scanner_error_t8  read_next_token
                             is_float = TRUE;
                             if( dot_seen )
                             {
-                                __write_error( SCN_INVALID_FLOAT, __cur_line, __cur_col );
-                                /*---------------
-                                Read until we
-                                get to the next
-                                token
-                                ---------------*/
-                                while( !( __space_seen )
-                                     && ( __is_number( __next_char )
-                                       || __is_letter( __next_char )
-                                       || ( '.' == __next_char ) ) )
-                                {
-                                    read_char = __get_next_char();
-                                }
-                                errored = TRUE;
-                                return( SCN_INVALID_TOKEN );
+                                __skip = TRUE;
+                                break;
                             }
-
                             dot_seen = TRUE;
                         }
 
@@ -933,19 +942,9 @@ scanner_error_t8  read_next_token
                             is_float = TRUE;
                             if( exp_seen )
                             {
-                                __write_error( SCN_INVALID_FLOAT, __cur_line, start_col );
-                                while( !( __space_seen )
-                                     && ( __is_number( __next_char )
-                                       || __is_letter( __next_char )
-                                       || ( '.' == __next_char ) ) )
-                                {
-                                    read_char = __get_next_char();
-                                }
-
-                                errored = TRUE;
-                                return( SCN_INVALID_TOKEN );
+                                __skip = TRUE;
+                                break;
                             }
-
                             exp_seen = TRUE;
                         }
 
@@ -953,7 +952,7 @@ scanner_error_t8  read_next_token
                           && !( __is_letter( __next_char ) )
                           && !( __is_number( __next_char ) ) )
                         {
-                            skip = TRUE;
+                            __skip = TRUE;
                             break;
                         }
 
@@ -1086,6 +1085,7 @@ scanner_error_t8  read_next_token
                         if( TOK_NO_CLASS == is_keyword( word ) )
                         {
                             token.token_class = TOK_IDENT;
+                            token.id.id_type  = TOK_NO_TYPE;
                             strcpy( token.id.in_str, word );
                             update_symbol_table( word, &token );
                             __write_token( TOK_IDENT, -1, word );

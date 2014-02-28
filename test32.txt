@@ -1,0 +1,1 @@
+[[if [= 1 1] [stdout true] [stdout false]][if [<= 1 1] [stdout true] [stdout false]] [if [> 1 0] [stdout true] [stdout false]][if [>= 1 1] [stdout true] [stdout false]][if [!= 1 100] [stdout true] [stdout false]]]

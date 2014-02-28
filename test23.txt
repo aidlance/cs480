@@ -1,1 +1,1 @@
-if <3x
+[[stdout [if [> 2 3] "yes" "no"]]]

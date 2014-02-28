@@ -26,42 +26,19 @@
                   LITERAL CONSTANTS
 -------------------------------------------------*/
 
+#define FORTH_EXTENSION ".fs"
+#define MAX_FILENAME_LENGTH 255
+//#define __DEBUG_PRINTS_PARSER
+
 typedef uint8 parser_state_t8;
 enum
 {
     PARSER_INIT,            /* parser init state        */
     PARSER_LOAD_FILE,       /* file loading state       */
     PARSER_PARSE_FILE,      /* file parsing state       */
+    PARSER_GEN_CODE,        /* code generation state    */
     PARSER_CLOSE_FILE       /* file closing state       */
 };
-
-/*-------------------------------------------------
-                        TYPES
--------------------------------------------------*/
-
-struct __parser_tree_type;
-struct __parser_tree_node_type;
-struct __parser_node_linked_list_link_type;
-
-typedef struct __parser_node_linked_list_link_type
-{
-    struct __parser_node_linked_list_link_type *next;       /* pointer to next link     */
-    struct __parser_tree_node_type             *tree_next;  /* pointer to child node    */
-} Link;
-
-typedef struct __parser_tree_node_type
-{
-    Link               *first_child;    /* node's last child        */
-    Link               *last_child;     /* node's first child       */
-    uint32              num_children;   /* number of children       */
-    Token               tok;            /* node's token data        */
-} Node;
-
-typedef struct __parser_tree_type
-{
-    Node       *top;        /* top of the tree          */
-    uint32      size;       /* size of the tree-not used*/
-} Tree;
 
 /*-------------------------------------------------
                    GLOBAL VARIABLES
@@ -74,6 +51,8 @@ static Token   __next_token;    /* next token to be read                */
 static Token   __prev_token;    /* previously read token--not needed    */
 static boolean __end_reached;   /* have we reached the end of the file? */
 static Tree   *__parse_tree;    /* pointer to the parse tree            */
+
+static FILE   *__cur_out_file = NULL;  /* pointer to output file               */
 
 /*-------------------------------------------------
                 FUNCTION PROTOTYPES
@@ -767,6 +746,7 @@ void __print_tree
     uint depth
 )
 {
+#ifdef __DEBUG_PRINTS_PARSER
     uint i;
     Link *temp;
 
@@ -792,6 +772,7 @@ void __print_tree
         fprintf( stdout, "    " );
     }
     print_minimal_token( &( n->tok ) );
+#endif
 
 }   /* __print_tree() */
 
@@ -807,13 +788,7 @@ parser_error_t8 __S
 
     if( ( TOK_LIST_TYPE != __peek()->tok_class ) || ( TOK_LIST_BEGIN != __peek()->list ) )
     {
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        err_code = __Oper3( new_node );
+        err_code = __Oper3( parent );
         if( PARSER_NO_ERROR != err_code )
         {
             return( err_code );
@@ -824,13 +799,7 @@ parser_error_t8 __S
             return( PARSER_NO_ERROR );
         }
 
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        err_code = __S( new_node );
+        err_code = __S( parent );
         if( PARSER_NO_ERROR != err_code )
         {
             return( err_code );
@@ -853,13 +822,13 @@ parser_error_t8 __S
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
-    err_code = __add_node( parent, cur_tok, NULL );
+    err_code = __add_node( parent, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __add_node( new_node, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
@@ -886,13 +855,7 @@ parser_error_t8 __S2
          || ( TOK_LITERAL    == __peek()->tok_class )
          || ( TOK_IDENT      == __peek()->tok_class ) )
         {
-            err_code = __add_node( parent, NULL, &new_node );
-            if( PARSER_NO_ERROR != err_code )
-            {
-                return( err_code );
-            }
-
-            err_code = __S( new_node );
+            err_code = __S( parent );
             if( PARSER_NO_ERROR != err_code )
             {
                 return( err_code );
@@ -908,13 +871,7 @@ parser_error_t8 __S2
         }
         else
         {
-            err_code = __add_node( parent, NULL, &new_node );
-            if( PARSER_NO_ERROR != err_code )
-            {
-                return( err_code );
-            }
-
-            err_code = __Expr2( new_node );
+            err_code = __Expr2( parent );
             if( PARSER_NO_ERROR != err_code )
             {
                 return( err_code );
@@ -944,13 +901,7 @@ parser_error_t8 __S2
      || ( TOK_LITERAL == __peek()->tok_class )
      || ( TOK_IDENT   == __peek()->tok_class ) )
     {
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        return( __S( new_node ) );
+        return( __S( parent ) );
     }
 
     return( PARSER_NO_ERROR );
@@ -964,6 +915,7 @@ parser_error_t8 __While
 )
 {
     Node *new_node;
+    Node *temp_node;
     Token *cur_tok;
     parser_error_t8 err_code;
 
@@ -982,30 +934,31 @@ parser_error_t8 __While
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
-    err_code = __add_node( parent, cur_tok, NULL );
+    err_code = __add_node( parent, cur_tok, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __add_node( new_node, NULL, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __Expr( new_node );
+    err_code = __Expr( temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __add_node( new_node, NULL, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
-    return( __Exprlist( new_node ) );
+
+    return( __Exprlist( temp_node ) );
 
 }   /* __While() */
 
@@ -1069,19 +1022,20 @@ parser_error_t8 __Print
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
-    err_code = __add_node( parent, cur_tok, NULL );
+    err_code = __add_node( parent, cur_tok, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __add_node( new_node, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    return( __Oper( new_node ) );
+    /* changed from __Expr( oper ) */
+    return( __Expr( new_node ) );
 
 }   /* __Print() */
 
@@ -1110,7 +1064,13 @@ parser_error_t8 __Let
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
-    err_code = __add_node( parent, cur_tok, NULL );
+    err_code = __add_node( parent, cur_tok, &new_node );
+    if( PARSER_NO_ERROR != err_code )
+    {
+        return( err_code );
+    }
+
+    err_code = __add_node( new_node, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
@@ -1131,13 +1091,7 @@ parser_error_t8 __Let
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
-    err_code = __add_node( parent, cur_tok, NULL );
-    if( PARSER_NO_ERROR != err_code )
-    {
-        return( err_code );
-    }
-
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __add_node( new_node, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
@@ -1164,7 +1118,7 @@ parser_error_t8 __Let
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
-    err_code = __add_node( parent, cur_tok, NULL );
+    err_code = __add_node( new_node, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
@@ -1265,6 +1219,7 @@ parser_error_t8 __If
 )
 {
     Node *new_node;
+    Node *temp_node;
     Token *cur_tok;
     parser_error_t8 err_code;
 
@@ -1283,30 +1238,30 @@ parser_error_t8 __If
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
-    err_code = __add_node( parent, cur_tok, NULL );
+    err_code = __add_node( parent, cur_tok, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __add_node( new_node, NULL, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __Expr( new_node );
+    err_code = __Expr( temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __add_node( new_node, NULL, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
-    return( __If2( new_node ) );
+    return( __If2( temp_node ) );
 
 }   /* __If() */
 
@@ -1316,8 +1271,8 @@ parser_error_t8 __If2
     Node *parent
 )
 {
-    Node *new_node;
     parser_error_t8 err_code;
+    Node *new_node;
 
     err_code = __add_node( parent, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
@@ -1351,7 +1306,6 @@ parser_error_t8 __Stmt
     Node *parent
 )
 {
-    Node *new_node;
     parser_error_t8 err_code;
 
     if( TOK_RESERVED_WORD != __peek()->tok_class )
@@ -1359,25 +1313,19 @@ parser_error_t8 __Stmt
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
-    if( PARSER_NO_ERROR != err_code )
-    {
-        return( err_code );
-    }
-
     switch( __peek()->stmt )
     {
         case TOK_LET:
-            return( __Let( new_node ) );
+            return( __Let( parent ) );
 
         case TOK_WHILE:
-            return( __While( new_node ) );
+            return( __While( parent ) );
 
         case TOK_STDOUT:
-            return( __Print( new_node ) );
+            return( __Print( parent ) );
 
         case TOK_IF:
-            return( __If( new_node ) );
+            return( __If( parent ) );
 
         default:
             return( PARSER_UNEXPECTED_TOKEN );
@@ -1390,19 +1338,12 @@ parser_error_t8 __Expr
     Node *parent
 )
 {
-    Node *new_node;
     Token *cur_tok;
     parser_error_t8 err_code;
 
     if( ( TOK_LITERAL == __peek()->tok_class ) || ( TOK_IDENT == __peek()->tok_class ) )
     {
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        return( __Oper3( new_node ) );
+        return( __Oper3( parent ) );
     }
 
     err_code = __get_next_token( &cur_tok );
@@ -1426,13 +1367,7 @@ parser_error_t8 __Expr
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
-    if( PARSER_NO_ERROR != err_code )
-    {
-        return( err_code );
-    }
-
-    err_code = __Expr2( new_node );
+    err_code = __Expr2( parent );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
@@ -1468,18 +1403,13 @@ parser_error_t8 __Oper
     Node *parent
 )
 {
-    Node *new_node;
+
     Token *cur_tok;
     parser_error_t8 err_code;
 
     if( ( TOK_LITERAL == __peek()->tok_class ) || ( TOK_IDENT == __peek()->tok_class ) )
     {
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-        return( __Oper3( new_node ) );
+        return( __Oper3( parent ) );
     }
 
     err_code = __get_next_token( &cur_tok );
@@ -1503,13 +1433,7 @@ parser_error_t8 __Oper
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
-    if( PARSER_NO_ERROR != err_code )
-    {
-        return( err_code );
-    }
-
-    err_code = __Oper2( new_node );
+    err_code = __Oper2( parent );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
@@ -1546,63 +1470,10 @@ parser_error_t8 __Oper2
 )
 {
     Node *new_node;
+    Node *temp_node;
     Token *cur_tok;
+    Token  temp_tok;
     parser_error_t8 err_code;
-
-    if( TOK_BINARY_OPP == __peek()->tok_class )
-    {
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        err_code = __Binop( new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        err_code = __Oper( new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-        return( __Oper( new_node ) );
-    }
-    else if( TOK_UNARY_OPP == __peek()->tok_class )
-    {
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        err_code = __Unop( new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        err_code = __add_node( parent, NULL, &new_node );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-        return( __Oper( new_node ) );
-    }
 
     err_code = __get_next_token( &cur_tok );
     switch( err_code )
@@ -1614,35 +1485,88 @@ parser_error_t8 __Oper2
             return( PARSER_FILE_END_REACHED );
     }
 
-    if( TOK_ASSN_CLASS != cur_tok->tok_class )
+    if( TOK_BINARY_OPP == cur_tok->tok_class )
+    {
+        err_code = __add_node( parent, cur_tok, &new_node );
+        if( PARSER_NO_ERROR != err_code )
+        {
+            return( err_code );
+        }
+
+        temp_node = new_node;
+        err_code = __add_node( temp_node, NULL, &new_node );
+        if( PARSER_NO_ERROR != err_code )
+        {
+            return( err_code );
+        }
+
+        err_code = __Oper( new_node );
+        if( PARSER_NO_ERROR != err_code )
+        {
+            return( err_code );
+        }
+
+        err_code = __add_node( temp_node, NULL, &new_node );
+        if( PARSER_NO_ERROR != err_code )
+        {
+            return( err_code );
+        }
+
+        return( __Oper( new_node ) );
+    }
+    else if( TOK_UNARY_OPP == cur_tok->tok_class )
+    {
+        err_code = __add_node( parent, cur_tok, &new_node );
+        if( PARSER_NO_ERROR != err_code )
+        {
+            return( err_code );
+        }
+
+        err_code = __add_node( new_node, NULL, &new_node );
+        if( PARSER_NO_ERROR != err_code )
+        {
+            return( err_code );
+        }
+
+        return( __Oper( new_node ) );
+    }
+    else if( TOK_ASSN_CLASS != cur_tok->tok_class )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
-    err_code = __add_node( parent, cur_tok, NULL );
+    err_code = __add_node( parent, cur_tok, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __get_next_token( &cur_tok );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __Name( new_node );
+    if( TOK_IDENT != cur_tok->tok_class )
+    {
+        return( PARSER_UNEXPECTED_TOKEN );
+    }
+
+    memcpy( &temp_tok, cur_tok, sizeof( temp_tok ) );
+
+    err_code = __add_node( temp_node, cur_tok, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __Oper( new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
-    return( __Oper( new_node ) );
+
+    return( __add_node( temp_node, &temp_tok, NULL ) );
 
 }   /* __Oper2() */
 
@@ -1652,22 +1576,13 @@ parser_error_t8 __Oper3
     Node *parent
 )
 {
-    Node *new_node;
-    parser_error_t8 err_code;
-
-    err_code = __add_node( parent, NULL, &new_node );
-    if( PARSER_NO_ERROR != err_code )
-    {
-        return( err_code );
-    }
-
     switch( __peek()->tok_class )
     {
         case TOK_LITERAL:
-            return( __Constant( new_node ) );
+            return( __Constant( parent ) );
 
         case TOK_IDENT:
-            return( __Name( new_node ) );
+            return( __Name( parent ) );
 
         default:
             return( PARSER_UNEXPECTED_TOKEN );
@@ -1681,21 +1596,12 @@ parser_error_t8 __Expr2
     Node *parent
 )
 {
-    Node *new_node;
-    parser_error_t8 err_code;
-
-    err_code = __add_node( parent, NULL, &new_node );
-    if( PARSER_NO_ERROR != err_code )
-    {
-        return( err_code );
-    }
-
     if( TOK_RESERVED_WORD == __peek()->tok_class )
     {
-        return( __Stmt( new_node ) );
+        return( __Stmt( parent ) );
     }
 
-    return( __Oper2( new_node ) );
+    return( __Oper2( parent ) );
 
 }   /* __Expr2() */
 
@@ -1732,72 +1638,6 @@ parser_error_t8 __Name
 
 }   /* __Name() */
 
-parser_error_t8 __Binop
-(
-    Node *parent
-)
-{
-    Token *cur_tok;
-    parser_error_t8 err_code;
-
-    err_code = __get_next_token( &cur_tok );
-    switch( err_code )
-    {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
-    }
-
-    if( TOK_BINARY_OPP == cur_tok->tok_class )
-    {
-        err_code = __add_node( parent, cur_tok, NULL );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        return( PARSER_NO_ERROR );
-    }
-
-    return( PARSER_UNEXPECTED_TOKEN );
-
-}   /* __Binop() */
-
-parser_error_t8 __Unop
-(
-    Node *parent
-)
-{
-    Token *cur_tok;
-    parser_error_t8 err_code;
-
-    err_code = __get_next_token( &cur_tok );
-    switch( err_code )
-    {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
-    }
-
-    if( TOK_UNARY_OPP == cur_tok->tok_class )
-    {
-        err_code = __add_node( parent, cur_tok, NULL );
-        if( PARSER_NO_ERROR != err_code )
-        {
-            return( err_code );
-        }
-
-        return( PARSER_NO_ERROR );
-    }
-
-    return( PARSER_UNEXPECTED_TOKEN );
-
-}   /* __Unop() */
-
 /* Varlist --> [Name Type] | [Name Type] Varlist */
 parser_error_t8 __Varlist
 (
@@ -1829,25 +1669,24 @@ parser_error_t8 __Varlist
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
+    err_code = __get_next_token( &cur_tok );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __Name( new_node );
+    if( TOK_IDENT != cur_tok->tok_class )
+    {
+        return( PARSER_UNEXPECTED_TOKEN );
+    }
+
+    err_code = __Type( parent );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
-    if( PARSER_NO_ERROR != err_code )
-    {
-        return( err_code );
-    }
-
-    err_code = __Type( new_node );
+    err_code = __add_node( parent, &__prev_token, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
@@ -1919,13 +1758,7 @@ parser_error_t8 __T
         return( err_code );
     }
 
-    err_code = __add_node( parent, NULL, &new_node );
-    if( PARSER_NO_ERROR != err_code )
-    {
-        return( err_code );
-    }
-
-    err_code = __S( new_node );
+    err_code = __S( parent );
     switch( err_code )
     {
         case PARSER_PARSE_ERROR:
@@ -1965,6 +1798,76 @@ parser_error_t8 __T
 
 }   /* __T() */
 
+//parser_error_t8 __gen_code
+//(
+//    Node *n
+//)
+//{
+//    Link *cur_link;
+//    char *forth_command;
+//
+//    if( NULL == n )
+//    {
+//        return( PARSER_NO_ERROR );
+//    }
+//
+//    cur_link = n->first_child;
+//    while( NULL != cur_link )
+//    {
+//        __gen_code( cur_link->tree_next );
+//        cur_link = cur_link->next;
+//    }
+//
+//    if( TOK_NO_CLASS == n->tok.tok_class )
+//    {
+//        return( PARSER_NO_ERROR );
+//    }
+//
+//    forth_command = __get_forth_command( &( n->tok ),  );
+//    if( NULL == forth_command )
+//    {
+//        return( PARSER_PARSE_ERROR );
+//    }
+//
+//    fprintf( __cur_out_file, "%s", forth_command );
+//    return( PARSER_NO_ERROR );
+//
+//}   /* __gen_code() */
+
+//parser_error_t8 gen_code
+//(
+//    void
+//)
+//{
+//    parser_error_t8 err_code;
+//    if( PARSER_GEN_CODE != __parser_state )
+//    {
+//        return( PARSER_PARSE_ERROR );
+//    }
+//
+//    if( NULL == __cur_out_file )
+//    {
+//        return( PARSER_PARSE_ERROR );
+//    }
+//
+//    err_code = __gen_code( __parse_tree->top );
+//    if( PARSER_NO_ERROR != err_code )
+//    {
+//        __print_error( err_code );
+//    }
+//    __parser_state = PARSER_CLOSE_FILE;
+//    return( err_code );
+//
+//}   /* gen_code() */
+
+Tree *get_parse_tree
+(
+    void
+)
+{
+    return( __parse_tree );
+
+}   /* get_parse_tree() */
 
 parser_error_t8 init_parser
 (
@@ -2008,6 +1911,10 @@ parser_error_t8 load_file
     char *filename
 )
 {
+    char *cur_char;
+    char *cur_out_char;
+    char out_fname[ MAX_FILENAME_LENGTH ];
+
     if( PARSER_LOAD_FILE != __parser_state )
     {
         return( PARSER_LOAD_ERROR );
@@ -2027,6 +1934,21 @@ parser_error_t8 load_file
     {
         __free_parse_tree_nodes( __parse_tree->top );
     }
+
+    memset( out_fname, 0, sizeof( out_fname ) / sizeof( *out_fname ) );
+    cur_char = filename;
+    cur_out_char = out_fname;
+    while( ( '.' != *cur_char ) && ( '\0' != *cur_char ) )
+    {
+        *(cur_out_char++) = *(cur_char++);
+    }
+    *cur_out_char = '\0';
+    strcat( out_fname, FORTH_EXTENSION );
+    //__cur_out_file = fopen( out_fname, "w" );
+    //if( NULL == __cur_out_file )
+    //{
+    //    return( PARSER_LOAD_ERROR );
+    //}
 
     __parser_state = PARSER_PARSE_FILE;
     __end_reached  = FALSE;
@@ -2068,14 +1990,16 @@ parser_error_t8 parse_file
         __print_error( err_code );
     }
 
-    __free_parse_tree_nodes( __parse_tree->top );
-    __parse_tree->top = NULL;
-    __parser_state = PARSER_CLOSE_FILE;
+    //__free_parse_tree_nodes( __parse_tree->top );
+    //__parse_tree->top = NULL;
+    __parser_state = PARSER_GEN_CODE;
 
     if( __end_reached || ( PARSER_NO_ERROR != err_code ) )
     {
         return( err_code );
     }
+
+    //gen_code( __parse_tree->top );
 
     __print_error( PARSER_PARSE_ERROR );
     return( PARSER_PARSE_ERROR );
@@ -2092,6 +2016,9 @@ parser_error_t8 unload_file
 
     __free_parse_tree();
     __parser_state = PARSER_LOAD_FILE;
+
+    //fclose( __cur_out_file );
+    __cur_out_file = NULL;
 
     return( PARSER_NO_ERROR );
 

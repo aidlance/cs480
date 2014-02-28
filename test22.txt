@@ -1,1 +1,1 @@
-[let]
+[[stdout [if [> 2 3] "yes"]]]

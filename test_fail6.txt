@@ -1,0 +1,1 @@
+[while [> x 5] [[stdout "hello"] [:= x [- x 1]]]] ]

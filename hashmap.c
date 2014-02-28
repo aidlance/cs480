@@ -781,11 +781,12 @@ uint32 add_map
         Clear all element data and
         copy over the new stuff
         -----------------------------*/
-        __free_element_data( new_element );
-        if( ERR_NO_ERROR != __init_element( new_element, key, val, size ) )
-        {
-            return( 0 );
-        }
+        memcpy( new_element->val, val, size );
+        //__free_element_data( new_element );
+        //if( ERR_NO_ERROR != __init_element( new_element, key, val, size ) )
+        //{
+        //    return( 0 );
+        //}
         return( __ptr_to_handle( new_element->val ) );
     }
 
