@@ -24,7 +24,7 @@
 #define FILENAME_IDX 1
 #define NUM_TESTS_PASS 41
 #define NUM_TESTS_FAIL 5
-#define __CODEBLOCKS_TEST
+//#define __CODEBLOCKS_TEST
 
 /*------------------------------------------------------------------------------------------
                                       PROCEDURES
@@ -76,10 +76,10 @@ int main( int argc, char **argv )
     {
         for( grr = 1; grr < argc; ++grr )
         {
-            if( '-' != *argv )
+            if( '-' != *argv[grr] )
             {
                 for( i = 0; i < 32; ++i ) printf( "-" );
-                printf("\nFile: %s\n");
+                printf("\nFile: %s\n", argv[grr]);
                 for( i = 0; i < 32; ++i ) printf( "-" );
                 printf("\n");
 
@@ -90,14 +90,19 @@ int main( int argc, char **argv )
 
                 if( PARSER_NO_ERROR == parse_file() )
                 {
-                    if( CGEN_NO_ERROR != gen_code( argc[ grr ] ) )
+                    if( CGEN_NO_ERROR != gen_code( argv[ grr ] ) )
                     {
-                        printf( "%s: semantics ERROR\n", argv[ grr ] );
+                        printf( "%s: semantics ERROR\n\n\n", argv[ grr ] );
+                    }
+                    else
+                    {
+
+                        printf( "%s: no errors\n\n\n", argv[ grr]);
                     }
                 }
                 else
                 {
-                    printf("%s: PARSER ERROR\n", fname );
+                    printf("%s: PARSER ERROR\n\n\n", argv[grr] );
                 }
                 unload_file();
             }

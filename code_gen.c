@@ -135,6 +135,7 @@ cgen_error_t8 __gen_code_binop( Node *n, type_class_t8 *type )
                 break;
 
             case TOK_INT_TYPE:
+                *type = TOK_REAL_TYPE;
                 fprintf( __cur_file, "s>f %s ", __get_forth_command( &( n->tok ), *type ) );
                 break;
 
@@ -255,7 +256,7 @@ cgen_error_t8 __gen_code_unop( Node *n, type_class_t8 *type )
             return( CGEN_SEM_ERROR );
         }
 
-        fprintf( __cur_file, "not " );
+        fprintf( __cur_file, "invert " );
         return( CGEN_NO_ERROR );
     }
     else
@@ -776,6 +777,7 @@ cgen_error_t8 __gen_code_assn( Node *n, type_class_t8 *type )
 
 cgen_error_t8 __walk_thru_nodes( Node *n, type_class_t8 *type )
 {
+    uint num_constants;
     cgen_error_t8 err_code;
     Link *cur_link;
 
@@ -783,6 +785,8 @@ cgen_error_t8 __walk_thru_nodes( Node *n, type_class_t8 *type )
     {
         return( CGEN_NO_ERROR );
     }
+
+    num_constants = 0;
 
     cur_link = n->first_child;
     while( NULL != cur_link )
@@ -829,10 +833,12 @@ cgen_error_t8 __walk_thru_nodes( Node *n, type_class_t8 *type )
                 break;
 
             case TOK_LITERAL:
+                ++num_constants;
                 err_code = __gen_code_literal( cur_link->tree_next, type );
                 break;
 
             case TOK_IDENT:
+                ++num_constants;
                 err_code = __gen_code_id( cur_link->tree_next, type );
                 break;
 
@@ -867,7 +873,7 @@ cgen_error_t8 __walk_thru_nodes( Node *n, type_class_t8 *type )
                 }
                 break;
 
-            case TOK_LIST_TYPE:
+            case TOK_LIST_TYPE:               
                 err_code = CGEN_NO_ERROR;
                 break;
 
@@ -877,6 +883,11 @@ cgen_error_t8 __walk_thru_nodes( Node *n, type_class_t8 *type )
 
             default:
                 return( CGEN_SEM_ERROR );
+        }
+
+        if( 1 < num_constants )
+        {
+            return( CGEN_SEM_ERROR );
         }
 
         if( CGEN_NO_ERROR!= err_code )
@@ -923,7 +934,7 @@ cgen_error_t8 gen_code
 
     if( NULL == input_filename )
     {
-        return( NULL );
+        return( CGEN_NULL_REF  );
     }
 
     cur_in = input_filename;
@@ -943,6 +954,7 @@ cgen_error_t8 gen_code
     }
 
     err_code = __gen_code_start( get_parse_tree()->top );
+    
     fclose( __cur_file );
 
 #ifndef __CGEN_DEBUG
@@ -1068,7 +1080,7 @@ char *__get_forth_command
                     break;
 
                 case TOK_NOT_OPP:
-                    sprintf( gforth_command, "not " );
+                    sprintf( gforth_command, "invert" );
                     break;
 
                 case TOK_POS_OPP:
