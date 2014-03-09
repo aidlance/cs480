@@ -1,1 +1,1 @@
-[[stdout [if [> 2 3] "yes" "no"]]]
+[[[if [> 2 3] [stdout "yes"][stdout "no"]]]]

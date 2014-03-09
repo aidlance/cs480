@@ -1035,7 +1035,8 @@ parser_error_t8 __Print
     }
 
     /* changed from __Expr( oper ) */
-    return( __Expr( new_node ) );
+    //return( __Expr( new_node ) );
+    return( __Oper( new_node ) );
 
 }   /* __Print() */
 
