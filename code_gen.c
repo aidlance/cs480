@@ -51,6 +51,7 @@
                                       PROCEDURES
 ------------------------------------------------------------------------------------------*/
 static boolean __in_let = FALSE;
+static boolean __str_cat_set = FALSE;
 static FILE *__cur_file = NULL;
 
 typedef struct
@@ -75,6 +76,7 @@ char *__get_forth_command
 
 cgen_error_t8 __gen_code_binop( Node *n, type_class_t8 *type )
 {
+    boolean is_str_cat = __str_cat_set;
     cgen_error_t8 err_code;
     type_class_t8 old_type;
 
@@ -84,7 +86,9 @@ cgen_error_t8 __gen_code_binop( Node *n, type_class_t8 *type )
     }
 
     if( 2 != n->num_children )
+    {
         return( CGEN_SEM_ERROR );
+    }
 
     err_code = __walk_thru_nodes( n->first_child->tree_next, type );
     if( CGEN_NO_ERROR != err_code )
@@ -95,18 +99,21 @@ cgen_error_t8 __gen_code_binop( Node *n, type_class_t8 *type )
     old_type = *type;
     if( TOK_STRING_TYPE == old_type )
     {
-        fprintf( __cur_file, "pad place pad count " );
+        if( is_str_cat )
+        {
+            fprintf( __cur_file, "pad +place pad count " );
+        }
+        else
+        {
+            __str_cat_set = TRUE;
+            fprintf( __cur_file, "pad place pad count " );
+        }
     }
 
     err_code = __walk_thru_nodes( n->first_child->next->tree_next, type );
     if( CGEN_NO_ERROR != err_code )
     {
         return( err_code );
-    }
-
-    if( NULL != n->first_child->next->next )
-    {
-        return( CGEN_SEM_ERROR );
     }
 
     if( TOK_INT_TYPE == old_type )
@@ -165,7 +172,11 @@ cgen_error_t8 __gen_code_binop( Node *n, type_class_t8 *type )
             return( CGEN_SEM_ERROR );
         }
 
-        fprintf( __cur_file, "pad +place pad count " );
+        if( __str_cat_set )
+        {
+            __str_cat_set = FALSE;
+            fprintf( __cur_file, "pad +place pad count " );
+        }
     }
     else
     {
@@ -186,7 +197,11 @@ cgen_error_t8 __gen_code_binop( Node *n, type_class_t8 *type )
             break;
     }
 
-    fprintf( __cur_file, "\n" );
+    //fprintf( __cur_file, "\n" );
+    if( !is_str_cat  )
+    {
+        __str_cat_set = FALSE;
+    }
     return( CGEN_NO_ERROR );
 
 }
@@ -264,7 +279,7 @@ cgen_error_t8 __gen_code_unop( Node *n, type_class_t8 *type )
         return( CGEN_SEM_ERROR );
     }
 
-    fprintf( __cur_file, "\n" );
+    //fprintf( __cur_file, "\n" );
     return( CGEN_NO_ERROR );
 
 }
@@ -355,7 +370,7 @@ cgen_error_t8 __gen_code_exp( Node *n, type_class_t8 *type )
         return( CGEN_SEM_ERROR );
     }
 
-    fprintf( __cur_file, "\n" );
+    //fprintf( __cur_file, "\n" );
     return( CGEN_NO_ERROR );
 
 }
@@ -535,7 +550,7 @@ cgen_error_t8 __gen_code_mod( Node *n, type_class_t8 *type )
         return( CGEN_SEM_ERROR );
     }
 
-    fprintf( __cur_file, "\n" );
+    //fprintf( __cur_file, "\n" );
     return( CGEN_NO_ERROR );
 
 }
@@ -873,7 +888,8 @@ cgen_error_t8 __walk_thru_nodes( Node *n, type_class_t8 *type )
                 }
                 break;
 
-            case TOK_LIST_TYPE:               
+            case TOK_LIST_TYPE:
+                num_constants = 0;
                 err_code = CGEN_NO_ERROR;
                 break;
 

@@ -1,0 +1,9 @@
+[
+[let [[x int][x4 bool]]]
+[stdout [-3.14e-159]]
+[stdout [and 4x]]
+[stdout [:= x4[<=10.1.1]]]
+]
+
+
+
