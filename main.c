@@ -22,8 +22,8 @@
                                      LITERAL CONSTANTS
 ------------------------------------------------------------------------------------------*/
 #define FILENAME_IDX 1
-#define NUM_TESTS_PASS 41
-#define NUM_TESTS_FAIL 5
+#define NUM_TESTS_PASS 47
+#define NUM_TESTS_FAIL 29
 //#define __CODEBLOCKS_TEST
 
 /*------------------------------------------------------------------------------------------
