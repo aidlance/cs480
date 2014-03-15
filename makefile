@@ -13,7 +13,7 @@ compiler: $(OBJS)
 	#$(CCC) $(CCFLAGS) -o compiler main.c -L $(OBJS)
 
 clean:
-	rm -f main.o core compiler stutest1.out stutest2.out stutest3.out stutest4.out stutest5.out stutest6.out stutest7.out stutest8.out stutest9.out stutest10.out stutest11.out stutest12.out stutest13.out stutest14.out stutest15.out stutest16.out stutest17.out stutest18.out stutest19.out stutest20.out stutest21.out stutest22.out stutest23.out hashmap.o hashmap.h.gch tokens.o tokens.h.gch symbol_table.o symbol_table.h.gch scanner.o scanner.h.gch parser.o parser.h.gch types.h.gch test1.fs test2.fs test3.fs test4.fs test5.fs test6.fs test7.fs test8.fs test9.fs test10.fs test11.fs test12.fs test13.fs test14.fs test15.fs test16.fs test17.fs test18.fs test19.fs test20.fs test21.fs test22.fs test23.fs test24.fs test25.fs test26.fs test27.fs test28.fs test29.fs test30.fs test31.fs test32.fs test33.fs test34.fs test35.fs test36.fs test37.fs test38.fs test39.fs test40.fs test41.fs stutest24.out stutest25.out stutest26.out stutest27.out stutest28.out stutest29.out stutest30.out stutest31.out stutest32.out stutest33.out stutest34.out stutest34.out stutest35.out stutest36.out stutest37.out stutest38.out stutest39.out stutest40.out stutest41.out stutest42.out stutest43.out stutest44.out test42.fs test43.fs test44.fs stutest_fail1.out stutest_fail2.out stutest_fail3.out stutest_fail4.out stutest_fail5.out stutest_fail6.out stutest_fail7.out stutest_fail8.out stutest_fail9.out stutest_fail10.out stutest_fail11.out stutest_fail12.out stutest_fail13.out code_gen.h.gch code_gen.o test45.fs stutest45.out stutest46.out test46.fs stutest_fail14.out stutest_fail15.out stutest_fail15.out stutest_fail16.out stutest_fail17.out stutest_fail18.out stutest_fail19.out stutest_fail20.out stutest_fail21.out stutest_fail22.out stutest_fail23.out stutest_fail24.out stutest_fail25.out stutest_fail26.out stutest_fail27.out stutest_fail28.out stutest_fail29.out stutest_fail30.out test47.fs stutest47.out 
+	rm -f main.o core compiler stutest1.out stutest2.out stutest3.out stutest4.out stutest5.out stutest6.out stutest7.out stutest8.out stutest9.out stutest10.out stutest11.out stutest12.out stutest13.out stutest14.out stutest15.out stutest16.out stutest17.out stutest18.out stutest19.out stutest20.out stutest21.out stutest22.out stutest23.out hashmap.o hashmap.h.gch tokens.o tokens.h.gch symbol_table.o symbol_table.h.gch scanner.o scanner.h.gch parser.o parser.h.gch types.h.gch test1.fs test2.fs test3.fs test4.fs test5.fs test6.fs test7.fs test8.fs test9.fs test10.fs test11.fs test12.fs test13.fs test14.fs test15.fs test16.fs test17.fs test18.fs test19.fs test20.fs test21.fs test22.fs test23.fs test24.fs test25.fs test26.fs test27.fs test28.fs test29.fs test30.fs test31.fs test32.fs test33.fs test34.fs test35.fs test36.fs test37.fs test38.fs test39.fs test40.fs test41.fs stutest24.out stutest25.out stutest26.out stutest27.out stutest28.out stutest29.out stutest30.out stutest31.out stutest32.out stutest33.out stutest34.out stutest34.out stutest35.out stutest36.out stutest37.out stutest38.out stutest39.out stutest40.out stutest41.out stutest42.out stutest43.out stutest44.out test42.fs test43.fs test44.fs stutest_fail1.out stutest_fail2.out stutest_fail3.out stutest_fail4.out stutest_fail5.out stutest_fail6.out stutest_fail7.out stutest_fail8.out stutest_fail9.out stutest_fail10.out stutest_fail11.out stutest_fail12.out stutest_fail13.out code_gen.h.gch code_gen.o test45.fs stutest45.out stutest46.out test46.fs stutest_fail14.out stutest_fail15.out stutest_fail15.out stutest_fail16.out stutest_fail17.out stutest_fail18.out stutest_fail19.out stutest_fail20.out stutest_fail21.out stutest_fail22.out stutest_fail23.out stutest_fail24.out stutest_fail25.out stutest_fail26.out stutest_fail27.out stutest_fail28.out stutest_fail29.out stutest_fail30.out test47.fs stutest47.out stutest48.fs stutest48.out stutest49.fs stutest49.out stutest50.fs stutest50.out stutest51.fs stutest51.out test_fail1.fs test_fail2.fs test_fail3.fs test_fail4.fs test_fail5.fs test_fail6.fs test_fail7.fs test_fail8.fs test_fail9.fs test_fail10.fs test_fail11.fs test_fail12.fs test_fail13.fs test_fail14.fs test_fail15.fs test_fail16.fs test_fail17.fs test_fail18.fs test_fail19.fs test_fail20.fs test_fail21.fs test_fail22.fs test_fail23.fs test_fail24.fs test_fail25.fs test_fail26.fs test_fail27.fs test_fail28.fs test_fail29.fs test_fail30.fs test_fail31.fs stutest_fail31.out
 	ls
 
 stutest.out: compiler
@@ -206,6 +206,22 @@ stutest.out: compiler
 	-compiler test47.txt > stutest47.out
 	gforth test47.fs -e bye
 	cat stutest47.out
+	cat test48.txt
+	-compiler test48.txt > stutest48.out
+	gforth test48.fs -e bye
+	cat stutest48.out
+	cat test49.txt
+	-compiler test49.txt > stutest49.out
+	gforth test49.fs -e bye
+	cat stutest49.out
+	cat test50.txt
+	-compiler test50.txt > stutest50.out
+	gforth test50.fs -e bye
+	cat stutest50.out
+	cat test51.txt
+	-compiler test51.txt > stutest51.out
+	gforth test51.fs -e bye
+	cat stutest51.out
 	cat test_fail1.txt
 	-compiler test_fail1.txt > stutest_fail1.out
 	cat stutest_fail1.out
@@ -296,6 +312,9 @@ stutest.out: compiler
 	cat test_fail30.txt
 	-compiler test_fail30.txt > stutest_fail30.out
 	cat stutest_fail30.out
+	cat test_fail31.txt
+	-compiler test_fail31.txt > stutest_fail31.out
+	cat stutest_fail31.out
 
 proftest.out: compiler
 	cat $(PROFTEST)

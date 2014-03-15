@@ -24,7 +24,7 @@
 #define NUM_TESTS_PASS 51   /* number of tests that should pass */
 #define NUM_TESTS_FAIL 31   /* number of tests that should fail */
 
-#define __CODEBLOCKS_TEST
+//#define __CODEBLOCKS_TEST
 
 /*-------------------------------------------------
                     PROCEDURES
