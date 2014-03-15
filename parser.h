@@ -25,16 +25,16 @@
 typedef sint8 parser_error_t8;
 enum
 {
-    PARSER_NO_ERROR =  0,
-    PARSER_NULL_REF = -1,
-    PARSER_INIT_ERROR = -2,
-    PARSER_LOAD_ERROR = -3,
-    PARSER_ALREADY_INITIALIZED = -4,
-    PARSER_PARSE_ERROR = -5,
-    PARSER_FILE_END_REACHED = -6,
-    PARSER_UNEXPECTED_TOKEN = -7,
-    PARSER_MISMATCHED_LIST = -8,
-    PARSER_NO_MEMORY       = -9
+    PARSER_NO_ERROR            =  0,    /* error code for no errors     */
+    PARSER_NULL_REF            = -1,    /* null reference error         */
+    PARSER_INIT_ERROR          = -2,    /* initialization error         */
+    PARSER_LOAD_ERROR          = -3,    /* load error                   */
+    PARSER_ALREADY_INITIALIZED = -4,    /* initialization error         */
+    PARSER_PARSE_ERROR         = -5,    /* misc. parser error           */
+    PARSER_FILE_END_REACHED    = -6,    /* end of file reached          */
+    PARSER_UNEXPECTED_TOKEN    = -7,    /* unexpected token error       */
+    PARSER_MISMATCHED_LIST     = -8,    /* mismatched "[" and "]"       */
+    PARSER_NO_MEMORY           = -9     /* no memory to create tree node*/
 };
 
 /*-------------------------------------------------
@@ -76,11 +76,6 @@ typedef struct __parser_tree_type
 /*-------------------------------------------------
                       PROCEDURES
 -------------------------------------------------*/
-
-//parser_error_t8 gen_code
-//(
-//    void
-//);
 
 Tree *get_parse_tree
 (

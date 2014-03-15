@@ -26,8 +26,6 @@
                   LITERAL CONSTANTS
 -------------------------------------------------*/
 
-#define FORTH_EXTENSION ".fs"
-#define MAX_FILENAME_LENGTH 255
 //#define __DEBUG_PRINTS_PARSER
 
 typedef uint8 parser_state_t8;
@@ -51,8 +49,6 @@ static Token   __next_token;    /* next token to be read                */
 static Token   __prev_token;    /* previously read token--not needed    */
 static boolean __end_reached;   /* have we reached the end of the file? */
 static Tree   *__parse_tree;    /* pointer to the parse tree            */
-
-static FILE   *__cur_out_file = NULL;  /* pointer to output file               */
 
 /*-------------------------------------------------
                 FUNCTION PROTOTYPES
@@ -640,27 +636,61 @@ parser_error_t8 __get_next_token
         }
     }
 
+    /*---------------------------------
+    If we've hit the end of file,
+    during the last call to this
+    function, return the EOF
+    ---------------------------------*/
     if( finished )
     {
         __parser_state = PARSER_CLOSE_FILE;
         return( PARSER_FILE_END_REACHED );
     }
 
+    /*---------------------------------
+    Otherwise, just return normally
+    ---------------------------------*/
     return( PARSER_NO_ERROR );
 
 }   /* __get_next_token() */
 
 
+/**************************************************
+*
+*   FUNCTION:
+*       __init_link - "Initialize Link"
+*
+*   DESCRIPTION:
+*       Initializes a link for the tree's
+*       list of children nodes
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_NULL_REF if the
+*         link reference is invalid
+*
+**************************************************/
 parser_error_t8 __init_link
 (
-    Link *l
+    Link       *l       /* link to be initialized       */
 )
 {
+    /*---------------------------------
+    Check if reference is valid
+    ---------------------------------*/
     if( NULL == l )
     {
         return( PARSER_NULL_REF );
     }
 
+    /*---------------------------------
+    Initialize the link's values and
+    return
+    ---------------------------------*/
     l->next      = NULL;
     l->tree_next = NULL;
 
@@ -669,16 +699,40 @@ parser_error_t8 __init_link
 }   /* __init_link() */
 
 
+/**************************************************
+*
+*   FUNCTION:
+*       __init_tree - "Initialize Tree"
+*
+*   DESCRIPTION:
+*       Initializes a tree
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there were
+*         no errors
+*       - Returns PARSER_NULL_REF if the tree
+*         reference is invalid
+*
+**************************************************/
 parser_error_t8 __init_tree
 (
-    Tree *t
+    Tree       *t       /* tree to be initialized       */
 )
 {
+    /*---------------------------------
+    Check for invalid reference
+    ---------------------------------*/
     if( NULL == t )
     {
         return( PARSER_NULL_REF );
     }
 
+    /*---------------------------------
+    Initialize tree values and return
+    ---------------------------------*/
     t->top  = NULL;
     t->size = 0;
 
@@ -687,6 +741,19 @@ parser_error_t8 __init_tree
 }   /* __init_tree() */
 
 
+/**************************************************
+*
+*   FUNCTION:
+*       __peek - "Peek"
+*
+*   DESCRIPTION:
+*       Returns a pointer to the next token
+*       to add to the parse tree
+*
+*   RETURNS
+*       Returns a pointer to a token
+*
+**************************************************/
 Token *__peek
 (
     void
@@ -696,9 +763,20 @@ Token *__peek
 
 }   /* __peek() */
 
+
+/**************************************************
+*
+*   FUNCTION:
+*       __print_error - "Print Error"
+*
+*   DESCRIPTION:
+*       Given an error code, this prints out
+*       an error message
+*
+**************************************************/
 void __print_error
 (
-    parser_error_t8 err_code
+    parser_error_t8     err_code        /* error code to print      */
 )
 {
     switch( err_code )
@@ -740,21 +818,47 @@ void __print_error
 
 }   /* __print_error() */
 
+
+/**************************************************
+*
+*   FUNCTION:
+*       __print_tree - "Print Tree"
+*
+*   DESCRIPTION:
+*       This function prints the parse tree
+*
+*   NOTES:
+*       This is only to be used as a debugging
+*       tool
+*
+**************************************************/
 void __print_tree
 (
-    Node *n,
-    uint depth
+    Node       *n,      /* current tree node        */
+    uint        depth   /* current depth            */
 )
 {
 #ifdef __DEBUG_PRINTS_PARSER
-    uint i;
-    Link *temp;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    uint        i;      /* for-loop iterator        */
+    Link       *temp;   /* temporary link           */
 
+    /*---------------------------------
+    Check for null reference
+    ---------------------------------*/
     if( NULL == n )
     {
         return;
     }
 
+    /*---------------------------------
+    Perform a post-order traversal on
+    the tree by looping through every
+    child of the current node and
+    recursively calling this function
+    ---------------------------------*/
     temp = n->first_child;
     while( NULL != temp )
     {
@@ -762,11 +866,18 @@ void __print_tree
         temp = temp->next;
     }
 
+    /*---------------------------------
+    If the node is just a place-holder,
+    don't print anything
+    ---------------------------------*/
     if( TOK_NO_CLASS == n->tok.tok_class )
     {
         return;
     }
 
+    /*---------------------------------
+    Print the token and return
+    ---------------------------------*/
     for( i = 0; i < depth; ++i )
     {
         fprintf( stdout, "    " );
@@ -776,29 +887,70 @@ void __print_tree
 
 }   /* __print_tree() */
 
-/* S --> [S2 | Oper3 S | Oper3 */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __S - "Start 1"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for whatever
+*       S stands for:
+*
+*           S --> [S2 | Oper3 S | Oper3
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of a statement
+*
+**************************************************/
 parser_error_t8 __S
 (
-    Node *parent
+    Node        *parent     /* parent node          */
 )
 {
-    Node *new_node;
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;   /* new node         */
+    Token              *cur_tok;    /* current token    */
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Check if the next token is a "["
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != __peek()->tok_class ) || ( TOK_LIST_BEGIN != __peek()->list ) )
     {
+        /*-----------------------------
+        If it isn't, call the __Oper3()
+        function
+        -----------------------------*/
         err_code = __Oper3( parent );
         if( PARSER_NO_ERROR != err_code )
         {
             return( err_code );
         }
 
+        /*-----------------------------
+        If the next token is a "]",
+        then return
+        ----------------------------*/
         if( ( TOK_LIST_TYPE == __peek()->tok_class ) && ( TOK_LIST_END == __peek()->list ) )
         {
             return( PARSER_NO_ERROR );
         }
 
+        /*-----------------------------
+        Otherwise, recursively call
+        this function again and return
+        -----------------------------*/
         err_code = __S( parent );
         if( PARSER_NO_ERROR != err_code )
         {
@@ -807,50 +959,96 @@ parser_error_t8 __S
         return( PARSER_NO_ERROR );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure that the token is a "["
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_BEGIN != cur_tok->list ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add an empty node to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( new_node, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Call this function and return
+    ---------------------------------*/
     return( __S2( new_node ) );
 
 }   /* __S() */
 
 
-/* S2 --> ] | S] | Expr2] | ]S */
+/**************************************************
+*
+*   FUNCTION:
+*       __S2 - "Start 2"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for an
+*       expression:
+*
+*           S --> ] | S] | Expr2] | ]S
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of a statement
+*
+**************************************************/
 parser_error_t8 __S2
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Node *new_node;
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;   /* new node         */
+    Token              *cur_tok;    /* current token    */
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Check if the next token is a "]"
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != __peek()->tok_class ) || ( TOK_LIST_END != __peek()->list ) )
     {
+        /*-----------------------------
+        If the next token is a "[,"
+        an identifier, or a constant,
+        then call some function.
+        Otherwise, call the expression
+        function.
+        -----------------------------*/
         if( ( ( TOK_LIST_TYPE == __peek()->tok_class ) && ( TOK_LIST_BEGIN == __peek()->list ) )
          || ( TOK_LITERAL    == __peek()->tok_class )
          || ( TOK_IDENT      == __peek()->tok_class ) )
@@ -860,14 +1058,6 @@ parser_error_t8 __S2
             {
                 return( err_code );
             }
-
-            /*
-            err_code = __S();
-            if( PARSER_NO_ERROR != err_code )
-            {
-                return( err_code );
-            }
-            */
         }
         else
         {
@@ -879,23 +1069,37 @@ parser_error_t8 __S2
         }
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the token is a "]"
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_END != cur_tok->list ) )
     {
         return( PARSER_MISMATCHED_LIST );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    If the next character is a "[," an
+    identifier, or a constant, then
+    call __S()
+    ---------------------------------*/
     if( ( ( TOK_LIST_TYPE  == __peek()->tok_class )
        && ( TOK_LIST_BEGIN == __peek()->list ) )
      || ( TOK_LITERAL == __peek()->tok_class )
@@ -904,85 +1108,172 @@ parser_error_t8 __S2
         return( __S( parent ) );
     }
 
+    /*---------------------------------
+    And return
+    ---------------------------------*/
     return( PARSER_NO_ERROR );
 
 }   /* __S2() */
 
-/* While --> while Expr Exprlist */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __While - "While"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for the
+*       while statement:
+*
+*           While --> while Expr Exprlist
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of the while statement
+*
+**************************************************/
 parser_error_t8 __While
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Node *new_node;
-    Node *temp_node;
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;       /* new node             */
+    Node               *temp_node;      /* temporary node       */
+    Token              *cur_tok;        /* current token        */
+    parser_error_t8     err_code;       /* error code           */
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    make sure that the token is a
+    while keyword
+        -----------------------------*/
     if( ( TOK_RESERVED_WORD != cur_tok->tok_class ) || ( TOK_WHILE != cur_tok->stmt ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Add a blank node to the tree
+    ---------------------------------*/
     err_code = __add_node( new_node, NULL, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Evaluate the conditional part of
+    the while statement
+    ---------------------------------*/
     err_code = __Expr( temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Add a blank node to the tree
+    ---------------------------------*/
     err_code = __add_node( new_node, NULL, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Evaluate the body of the while
+    ---------------------------------*/
     return( __Exprlist( temp_node ) );
 
 }   /* __While() */
 
-/* Exprlist --> Expr | Expr Exprlist */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Exptlist - "Expression List"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for the
+*       while statement's expression list:
+*
+*           Exprlist --> Expr | Expr Exprlist
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of the expression list
+*
+**************************************************/
 parser_error_t8 __Exprlist
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Node *new_node;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;   /* new node         */
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Add a new blank node to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Evaluate the expression's
+    grammatical correctness
+    ---------------------------------*/
     err_code = __Expr( new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    If there's another expression
+    (a "[" is the next token), then
+    evaluate the expression for
+    grammatical correctness and return
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE == __peek()->tok_class ) && ( TOK_LIST_BEGIN == __peek()->list ) )
     {
         err_code = __add_node( parent, NULL, &new_node );
@@ -993,161 +1284,276 @@ parser_error_t8 __Exprlist
         return( __Exprlist( new_node ) );
     }
 
+    /*---------------------------------
+    and return
+    ---------------------------------*/
     return( PARSER_NO_ERROR );
 
 }   /* __Exprlist() */
 
-/* Print --> stdout Oper */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Print - "Print"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for the
+*       stdout function:
+*
+*           Print --> stdout Oper
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*
+**************************************************/
 parser_error_t8 __Print
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Node *new_node;
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;   /* new node         */
+    Token              *cur_tok;    /* current token    */
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Check if it's the stdout keyword
+    ---------------------------------*/
     if( ( TOK_RESERVED_WORD != cur_tok->tok_class ) || ( TOK_STDOUT != cur_tok->stmt ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add a node for  the statement
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Add a new blank node to be the
+    child of the keyword
+    ---------------------------------*/
     err_code = __add_node( new_node, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
-    /* changed from __Expr( oper ) */
-    //return( __Expr( new_node ) );
+    /*---------------------------------
+    Process the next expression
+    ---------------------------------*/
     return( __Oper( new_node ) );
 
 }   /* __Print() */
 
-/* Let --> let [Varlist] */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Let - "Let"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for the
+*       let statement:
+*
+*           Let --> let [Varlist]
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of the let statement
+*
+**************************************************/
 parser_error_t8 __Let
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Node *new_node;
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;   /* new node         */
+    Token              *cur_tok;    /* current token    */
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the token is a let
+    keyword
+    ---------------------------------*/
     if( ( TOK_RESERVED_WORD != cur_tok->tok_class ) || ( TOK_LET != cur_tok->stmt ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Add a blank node to the tree
+    ---------------------------------*/
     err_code = __add_node( new_node, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the token is a "["
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_BEGIN != cur_tok->list ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( new_node, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Check if the variable list conforms
+    to the grammar
+    ---------------------------------*/
     err_code = __Varlist( new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure that it's a "]"
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_END != cur_tok->list ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( new_node, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    And return
+    ---------------------------------*/
     return( PARSER_NO_ERROR );
 
 }   /* __Let() */
 
 
+/**************************************************
+*
+*   FUNCTION:
+*       __Type - "Type"
+*
+*   DESCRIPTION:
+*       Verifies that the next token is type
+*       keyword
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the token wasn't a type keyword
+*
+**************************************************/
 parser_error_t8 __Type
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Token           *cur_tok;   /* current token        */
+    parser_error_t8  err_code;  /* error code           */
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure that the token is a type
+    keyword
+    ---------------------------------*/
     if( TOK_RESERVED_WORD == cur_tok->tok_class )
     {
         switch( cur_tok->stmt )
@@ -1156,6 +1562,10 @@ parser_error_t8 __Type
             case TOK_REAL:
             case TOK_BOOL:
             case TOK_STRING:
+                /*---------------------
+                Add a new node to the
+                parse tree and return
+                ---------------------*/
                 err_code = __add_node( parent, cur_tok, NULL );
                 if( PARSER_NO_ERROR != err_code )
                 {
@@ -1163,33 +1573,62 @@ parser_error_t8 __Type
                 }
 
                 return( PARSER_NO_ERROR );
+
             default:
                 break;
         }
     }
 
+    /*---------------------------------
+    If it isn't, then throw an error
+    ---------------------------------*/
     return( PARSER_UNEXPECTED_TOKEN );
 
 }   /* __Type() */
 
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Constant - "Constant"
+*
+*   DESCRIPTION:
+*       Verifies that the next token is a constant
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the token wasn't a constant
+*
+**************************************************/
 parser_error_t8 __Constant
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Token              *cur_tok;    /* current token        */
+    parser_error_t8     err_code;   /* error code           */
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure that the token is a
+    literal and has a valid type
+    ---------------------------------*/
     if( TOK_LITERAL == cur_tok->tok_class )
     {
         switch( cur_tok->type )
@@ -1198,65 +1637,118 @@ parser_error_t8 __Constant
             case TOK_REAL_TYPE:
             case TOK_BOOL_TYPE:
             case TOK_STRING_TYPE:
+                /*---------------------
+                Add a node to the tree
+                and return
+                --------------------*/
                 err_code = __add_node( parent, cur_tok, NULL );
                 if( PARSER_NO_ERROR != err_code )
                 {
                     return( err_code );
                 }
+
                 return( PARSER_NO_ERROR );
+
             default:
                 break;
         }
     }
 
+    /*---------------------------------
+    If it wasn't a literal or the
+    type wasn't valid, throw an error
+    ---------------------------------*/
     return( PARSER_UNEXPECTED_TOKEN );
 
 }   /* __Constant() */
 
-/* If --> if Expr If2 */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __If - "If"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for the
+*       if statement:
+*
+*           If --> if Expr If2
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of the if statement
+*
+**************************************************/
 parser_error_t8 __If
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Node *new_node;
-    Node *temp_node;
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;   /* new node         */
+    Node               *temp_node;  /* temporary node   */
+    Token              *cur_tok;    /* current token    */
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Grab next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure that the token is an if
+    keyword
+    ---------------------------------*/
     if( ( TOK_RESERVED_WORD != cur_tok->tok_class ) || ( TOK_IF != cur_tok->stmt ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add token to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Create a new blank node
+    ---------------------------------*/
     err_code = __add_node( new_node, NULL, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    The next expression is the
+    conditional part of the if
+    ---------------------------------*/
     err_code = __Expr( temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Add a new node and check whether
+    the branches conform to the grammar
+    ---------------------------------*/
     err_code = __add_node( new_node, NULL, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
@@ -1266,27 +1758,65 @@ parser_error_t8 __If
 
 }   /* __If() */
 
-/* If2 --> Expr | Expr Expr */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __If2 - "If 2"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for the
+*       if statement's branches:
+*
+*           If2 --> Expr | Expr Expr
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of the if statement's
+*         branches
+*
+**************************************************/
 parser_error_t8 __If2
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    parser_error_t8 err_code;
-    Node *new_node;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    parser_error_t8     err_code;   /* error code           */
+    Node               *new_node;   /* new node             */
 
+    /*---------------------------------
+    Add a blank node to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Evaluate the first branch
+    ---------------------------------*/
     err_code = __Expr( new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    If there is a second branch ("["
+    is the next token), then evaluate
+    the branch and return
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != __peek()->tok_class ) || ( TOK_LIST_END != __peek()->list ) )
     {
         err_code = __add_node( parent, NULL, &new_node );
@@ -1297,23 +1827,55 @@ parser_error_t8 __If2
         return( __Expr( new_node ) );
     }
 
+    /*---------------------------------
+    And return
+    ---------------------------------*/
     return( PARSER_NO_ERROR );
 
 }   /* __If2() */
 
-/* Stmt --> If | While | Let | Print */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Stmt - "Statement"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for a
+*       statement:
+*
+*           Stmt --> If | While | Let | Print
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of a statement
+*
+**************************************************/
 parser_error_t8 __Stmt
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    parser_error_t8 err_code;
-
+    /*---------------------------------
+    Make sure that the next token is
+    a keyword
+    ---------------------------------*/
     if( TOK_RESERVED_WORD != __peek()->tok_class )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Call the corresponding function
+    and return
+    ---------------------------------*/
     switch( __peek()->stmt )
     {
         case TOK_LET:
@@ -1334,61 +1896,109 @@ parser_error_t8 __Stmt
 
 }   /* __Stmt() */
 
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Expr - "Expression 1"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for an
+*       expression:
+*
+*           Expr --> [Expr2] | Oper3
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of an expression
+*
+**************************************************/
 parser_error_t8 __Expr
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Token              *cur_tok;    /* current token        */
+    parser_error_t8     err_code;   /* error code           */
 
+    /*---------------------------------
+    If the next token is a literal
+    or an identifier, then make sure
+    that the next token conforms
+    to the corresponding grammar
+    ---------------------------------*/
     if( ( TOK_LITERAL == __peek()->tok_class ) || ( TOK_IDENT == __peek()->tok_class ) )
     {
         return( __Oper3( parent ) );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the token is a "["
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_BEGIN != cur_tok->list ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the token to the parse tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the innards conform to
+    the grammar of the inner expression
+    ---------------------------------*/
     err_code = __Expr2( parent );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure that the token is a "]"
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_END != cur_tok->list ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the token to the parse tree
+    and return
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
@@ -1398,63 +2008,107 @@ parser_error_t8 __Expr
 
 }   /* __Expr() */
 
-/* Oper --> [Oper2] | Oper3 */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Oper - "Operator 1"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for an
+*       operator:
+*
+*           Oper --> [Oper2] | Oper3
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of an operator
+*
+**************************************************/
 parser_error_t8 __Oper
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Token              *cur_tok;    /* current token        */
+    parser_error_t8     err_code;   /* error code           */
 
-    Token *cur_tok;
-    parser_error_t8 err_code;
-
+    /*---------------------------------
+    Make sure the next token is a "["
+    ---------------------------------*/
     if( ( TOK_LITERAL == __peek()->tok_class ) || ( TOK_IDENT == __peek()->tok_class ) )
     {
         return( __Oper3( parent ) );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the token is a "["
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_BEGIN != cur_tok->list ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the next few tokens
+    conform to the grammar of the
+    inner operator expression
+    ---------------------------------*/
     err_code = __Oper2( parent );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the token is a "]"
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_END != cur_tok->list ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    and return
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
@@ -1464,36 +2118,73 @@ parser_error_t8 __Oper
 
 }   /* __Oper() */
 
-/* Oper2 --> := Name Oper | Binop Oper Oper | Unop Oper */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Oper2 - "Operator 2"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for the inner
+*       operator expression:
+*
+*           Oper2 --> := Name Oper
+                    | Binop Oper Oper
+                    | Unop Oper
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of the inner operator
+*         expression
+*
+**************************************************/
 parser_error_t8 __Oper2
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Node *new_node;
-    Node *temp_node;
-    Token *cur_tok;
-    Token  temp_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;   /* new node         */
+    Node               *temp_node;  /* temporary node   */
+    Token              *cur_tok;    /* current token    */
+    Token               temp_tok;   /* temporary token  */
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Check if it's a binary operator
+    ---------------------------------*/
     if( TOK_BINARY_OPP == cur_tok->tok_class )
     {
+        /*-----------------------------
+        Add the token to the tree
+        -----------------------------*/
         err_code = __add_node( parent, cur_tok, &new_node );
         if( PARSER_NO_ERROR != err_code )
         {
             return( err_code );
         }
 
+        /*-----------------------------
+        Add an empty node to the tree
+        -----------------------------*/
         temp_node = new_node;
         err_code = __add_node( temp_node, NULL, &new_node );
         if( PARSER_NO_ERROR != err_code )
@@ -1501,82 +2192,174 @@ parser_error_t8 __Oper2
             return( err_code );
         }
 
+        /*-----------------------------
+        Confirm that the next few
+        tokens conform to the grammar
+        of an operator expression
+        -----------------------------*/
         err_code = __Oper( new_node );
         if( PARSER_NO_ERROR != err_code )
         {
             return( err_code );
         }
 
+        /*-----------------------------
+        Add another blank node
+        -----------------------------*/
         err_code = __add_node( temp_node, NULL, &new_node );
         if( PARSER_NO_ERROR != err_code )
         {
             return( err_code );
         }
 
+        /*-----------------------------
+        Make sure that the second
+        operation conforms to the
+        operation grammar
+        -----------------------------*/
         return( __Oper( new_node ) );
     }
+
+    /*---------------------------------
+    Check if we are a unary operator
+    ---------------------------------*/
     else if( TOK_UNARY_OPP == cur_tok->tok_class )
     {
+        /*-----------------------------
+        Add the token to the tree
+        -----------------------------*/
         err_code = __add_node( parent, cur_tok, &new_node );
         if( PARSER_NO_ERROR != err_code )
         {
             return( err_code );
         }
 
+        /*-----------------------------
+        Add an empty node to the tree
+        -----------------------------*/
         err_code = __add_node( new_node, NULL, &new_node );
         if( PARSER_NO_ERROR != err_code )
         {
             return( err_code );
         }
 
+        /*-----------------------------
+        Make sure that we conform to
+        the grammar of an operation
+        -----------------------------*/
         return( __Oper( new_node ) );
     }
     else if( TOK_ASSN_CLASS != cur_tok->tok_class )
     {
+        /*-----------------------------
+        If we aren't an assignment,
+        then this doesn't conform
+        to our grammar
+        -----------------------------*/
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, &temp_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Verify that the token is an
+    identifier
+    ---------------------------------*/
     if( TOK_IDENT != cur_tok->tok_class )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Copy the token over to the
+    temporary token. We add the
+    identifier and the operation to
+    the tree in reverse order so that
+    the code generation is easier
+    (the assignment operator needs
+     to have two children).
+    ---------------------------------*/
     memcpy( &temp_tok, cur_tok, sizeof( temp_tok ) );
 
-    err_code = __add_node( temp_node, cur_tok, &new_node );
+    /*---------------------------------
+   *** 3/14: CHANGED cur_tok TO NULL ***
+
+    Add a blank node to the tree
+    ---------------------------------*/
+    err_code = __add_node( temp_node, NULL, &new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the operation conforms
+    to the grammar of the operation
+    ---------------------------------*/
     err_code = __Oper( new_node );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Finally, add the token to the
+    tree and return.
+    ---------------------------------*/
     return( __add_node( temp_node, &temp_tok, NULL ) );
 
 }   /* __Oper2() */
 
-/* Oper3 --> Constant | Name */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Oper3 - "Operator 3"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for the
+*       third operator production:
+*
+*           Oper3 --> Constant | Name
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of the operator type
+*
+**************************************************/
 parser_error_t8 __Oper3
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
+    /*---------------------------------
+    Determine which function to call
+    based on the next token's
+    token class
+    ---------------------------------*/
     switch( __peek()->tok_class )
     {
         case TOK_LITERAL:
@@ -1591,41 +2374,101 @@ parser_error_t8 __Oper3
 
 }   /* __Oper3() */
 
-/* Expr2 --> Stmt | Oper2 */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Expr2 - "Expression 2"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for the
+*       second expression production:
+*
+*           Expr2 --> Stmt | Oper2
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of the expression type
+*
+**************************************************/
 parser_error_t8 __Expr2
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
+    /*---------------------------------
+    If the next token is a statement,
+    call the statement function
+    ---------------------------------*/
     if( TOK_RESERVED_WORD == __peek()->tok_class )
     {
         return( __Stmt( parent ) );
     }
 
+    /*---------------------------------
+    Otherwise, call the operator
+    function
+    ---------------------------------*/
     return( __Oper2( parent ) );
 
 }   /* __Expr2() */
 
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Name - "Name"
+*
+*   DESCRIPTION:
+*       Verifies that the next token is an
+*       identifier
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the token wasn't an identifier
+*
+**************************************************/
 parser_error_t8 __Name
 (
-    Node *parent
+    Node       *parent  /* parent node          */
 )
 {
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Token              *cur_tok;    /* current token        */
+    parser_error_t8     err_code;   /* error code           */
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Is the token an identifier?
+    ---------------------------------*/
     if( TOK_IDENT == cur_tok->tok_class )
     {
+        /*-----------------------------
+        Add the identifier to the tree
+        and return
+        -----------------------------*/
         err_code = __add_node( parent, cur_tok, NULL );
         if( PARSER_NO_ERROR != err_code )
         {
@@ -1635,109 +2478,235 @@ parser_error_t8 __Name
         return( PARSER_NO_ERROR );
     }
 
+    /*---------------------------------
+    Not an identifier? Not a problem!
+    Just fail.
+    ---------------------------------*/
     return( PARSER_UNEXPECTED_TOKEN );
 
 }   /* __Name() */
 
-/* Varlist --> [Name Type] | [Name Type] Varlist */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __Varlist - "Variable List"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for a
+*       variable list:
+*
+*           Varlist --> [Name Type]
+*                     | [Name Type] Varlist
+*
+*       The sub-tree of a Varlist will look
+*       like:
+*               Parent
+*                 |
+*             ----|---------------
+*            /    |    \         |
+*           [     |     ]        |
+*                / \           BLANK
+*               /   \            |
+*              ID  Type       Varlist
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of a variable list
+*
+**************************************************/
 parser_error_t8 __Varlist
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Node *new_node;
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;   /* new node         */
+    Token              *cur_tok;    /* current token    */
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the token is a "["
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_BEGIN != cur_tok->list ) )
     {
         return( PARSER_PARSE_ERROR );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the token is an
+    identifier
+
+    NOTE: We do this instead of calling
+          __Name() so that we can add
+          the identifier to the tree
+          after the type. This makes
+          the code generator produce
+          valid code during its
+          traversal
+    ---------------------------------*/
     if( TOK_IDENT != cur_tok->tok_class )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Make sure the next thing is a type
+    ---------------------------------*/
     err_code = __Type( parent );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Add the identifier to the tree
+
+    NOTE: We know it's safe to do this
+          because the type always
+          follows the identifier in
+          a valid program
+    ---------------------------------*/
     err_code = __add_node( parent, &__prev_token, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
-    switch( err_code )
+    if( PARSER_NO_ERROR != err_code )
     {
-        case PARSER_PARSE_ERROR:
-            return( PARSER_PARSE_ERROR );
-
-        case PARSER_FILE_END_REACHED:
-            return( PARSER_FILE_END_REACHED );
+        return( err_code );
     }
 
+    /*---------------------------------
+    Make sure that the token is a "]"
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_END != cur_tok->list ) )
     {
         return( PARSER_UNEXPECTED_TOKEN );
     }
 
+    /*---------------------------------
+    Add the node to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Check if the next token is a "["
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE == __peek()->tok_class ) && ( TOK_LIST_BEGIN == __peek()->list ) )
     {
+        /*-----------------------------
+        Add an empty node to the tree
+        -----------------------------*/
         err_code = __add_node( parent, NULL, &new_node );
         if( PARSER_NO_ERROR != err_code )
         {
             return( err_code );
         }
+
+        /*-----------------------------
+        Recursively call this function
+        and return
+        -----------------------------*/
         return( __Varlist( new_node ) );
     }
 
+    /*---------------------------------
+    If it isn't, then return
+    ---------------------------------*/
     return( PARSER_NO_ERROR );
 
 }   /* __Varlist() */
 
-/* T --> [S] */
+
+/**************************************************
+*
+*   FUNCTION:
+*       __T - "T?"
+*
+*   DESCRIPTION:
+*       Verifies that the next few tokens
+*       match the grammar's rules for a
+*       program:
+*
+*           T --> [S] | Empty
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the statement didn't conform to
+*         the grammar of a program
+*       - Returns PARSER_PARSE_ERROR if
+*         the program doesn't have "[" as the
+*         first token
+*       - Returns PARSER_MISMATCHED_LIST if
+*         "[" and "]" are mismatched.
+*
+**************************************************/
 parser_error_t8 __T
 (
-    Node *parent
+    Node       *parent      /* parent node          */
 )
 {
-    Node *new_node;
-    Token *cur_tok;
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    Node               *new_node;   /* new node         */
+    Token              *cur_tok;    /* current token    */
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Grab the next token. If the token
+    is an EOF, accept the program
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
     if( PARSER_NO_ERROR != err_code )
     {
@@ -1748,17 +2717,27 @@ parser_error_t8 __T
         return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the token is a "["
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE != cur_tok->tok_class ) || ( TOK_LIST_BEGIN != cur_tok->list ) )
     {
         return( PARSER_PARSE_ERROR );
     }
 
+    /*---------------------------------
+    Add the token to the tree
+    ---------------------------------*/
     err_code = __add_node( parent, cur_tok, NULL );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Make sure the program conforms to
+    the grammar of the S production
+    ---------------------------------*/
     err_code = __S( parent );
     switch( err_code )
     {
@@ -1777,15 +2756,24 @@ parser_error_t8 __T
             return( PARSER_PARSE_ERROR );
     }
 
+    /*---------------------------------
+    Grab the next token
+    ---------------------------------*/
     err_code = __get_next_token( &cur_tok );
     if( PARSER_NO_ERROR != err_code )
     {
         return( err_code );
     }
 
+    /*---------------------------------
+    Make sure that the token is a "]"
+    ---------------------------------*/
     if( ( TOK_LIST_TYPE == cur_tok->tok_class )
       &&( TOK_LIST_END  == cur_tok->list      ) )
     {
+        /*-----------------------------
+        Add the token to the tree
+        -----------------------------*/
         err_code = __add_node( parent, cur_tok, NULL );
         if( PARSER_NO_ERROR != err_code )
         {
@@ -1795,72 +2783,26 @@ parser_error_t8 __T
         return( PARSER_NO_ERROR );
     }
 
+    /*---------------------------------
+    And return
+    ---------------------------------*/
     return( PARSER_UNEXPECTED_TOKEN );
 
 }   /* __T() */
 
-//parser_error_t8 __gen_code
-//(
-//    Node *n
-//)
-//{
-//    Link *cur_link;
-//    char *forth_command;
-//
-//    if( NULL == n )
-//    {
-//        return( PARSER_NO_ERROR );
-//    }
-//
-//    cur_link = n->first_child;
-//    while( NULL != cur_link )
-//    {
-//        __gen_code( cur_link->tree_next );
-//        cur_link = cur_link->next;
-//    }
-//
-//    if( TOK_NO_CLASS == n->tok.tok_class )
-//    {
-//        return( PARSER_NO_ERROR );
-//    }
-//
-//    forth_command = __get_forth_command( &( n->tok ),  );
-//    if( NULL == forth_command )
-//    {
-//        return( PARSER_PARSE_ERROR );
-//    }
-//
-//    fprintf( __cur_out_file, "%s", forth_command );
-//    return( PARSER_NO_ERROR );
-//
-//}   /* __gen_code() */
 
-//parser_error_t8 gen_code
-//(
-//    void
-//)
-//{
-//    parser_error_t8 err_code;
-//    if( PARSER_GEN_CODE != __parser_state )
-//    {
-//        return( PARSER_PARSE_ERROR );
-//    }
-//
-//    if( NULL == __cur_out_file )
-//    {
-//        return( PARSER_PARSE_ERROR );
-//    }
-//
-//    err_code = __gen_code( __parse_tree->top );
-//    if( PARSER_NO_ERROR != err_code )
-//    {
-//        __print_error( err_code );
-//    }
-//    __parser_state = PARSER_CLOSE_FILE;
-//    return( err_code );
-//
-//}   /* gen_code() */
-
+/**************************************************
+*
+*   FUNCTION:
+*       get_parse_tree - "Get Parse Tree"
+*
+*   DESCRIPTION:
+*       Returns the parse tree
+*
+*   RETURNS:
+*       Returns the parse tree
+*
+**************************************************/
 Tree *get_parse_tree
 (
     void
@@ -1870,20 +2812,55 @@ Tree *get_parse_tree
 
 }   /* get_parse_tree() */
 
+
+/**************************************************
+*
+*   FUNCTION:
+*       init_parser - "Initialize Parser"
+*
+*   DESCRIPTION:
+*       Initializes the parser
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_ALREADY_INNITIALIZED
+*         if the parser has already been
+*         initialized
+*       - Returns PARSER_INIT_ERROR if the
+*         parser was unable to create or
+*         initialize its tree, or if the
+*         scanner couldn't be initialized
+*
+**************************************************/
 parser_error_t8 init_parser
 (
     void
 )
 {
+    /*---------------------------------
+    Check if we've already been
+    initialized
+    ---------------------------------*/
     if( PARSER_INIT != __parser_state )
     {
         return( PARSER_ALREADY_INITIALIZED );
     }
 
+    /*---------------------------------
+    Clear the tokens
+    ---------------------------------*/
     memset( &__prev_token, 0, sizeof( __prev_token ) );
     memset( &__cur_token,  0, sizeof( __cur_token  ) );
     memset( &__next_token, 0, sizeof( __next_token ) );
 
+    /*---------------------------------
+    Create and initialize the parse
+    tree
+    ---------------------------------*/
     __parse_tree = __create_tree();
     if( NULL == __parse_tree )
     {
@@ -1895,11 +2872,18 @@ parser_error_t8 init_parser
         return( PARSER_INIT_ERROR );
     }
 
+    /*---------------------------------
+    Initialize the scanner
+    ---------------------------------*/
     if( SCN_NO_ERROR != init_scanner() )
     {
         return( PARSER_INIT_ERROR );
     }
 
+    /*---------------------------------
+    Make sure we update our state
+    and return
+    ---------------------------------*/
     __parser_state = PARSER_LOAD_FILE;
 
     return( PARSER_NO_ERROR );
@@ -1907,25 +2891,52 @@ parser_error_t8 init_parser
 }   /* init_parser() */
 
 
+/**************************************************
+*
+*   FUNCTION:
+*       load_file
+*
+*   DESCRIPTION:
+*       Loads a file so that it can be parsed
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_LOAD_ERROR if
+*         the parser isn't ready to load
+*         a new file, or if the scanner
+*         couldn't load the file
+*
+**************************************************/
 parser_error_t8 load_file
 (
-    char *filename
+    char       *filename    /* name of the file to open */
 )
 {
-    char *cur_char;
-    char *cur_out_char;
-    char out_fname[ MAX_FILENAME_LENGTH ];
-
+    /*---------------------------------
+    Check if we're in the right state
+    ---------------------------------*/
     if( PARSER_LOAD_FILE != __parser_state )
     {
         return( PARSER_LOAD_ERROR );
     }
 
+    /*---------------------------------
+    Tell the scanner to load the file
+    ---------------------------------*/
     if( SCN_OPEN_ERROR == load_scanner_file( filename ) )
     {
         return( PARSER_LOAD_ERROR );
     }
 
+    /*---------------------------------
+    Create the parse tree if it doesn't
+    already exist. If it does, free all
+    of its nodes
+    ---------------------------------*/
     if( NULL == __parse_tree )
     {
         __parse_tree = __create_tree();
@@ -1936,24 +2947,16 @@ parser_error_t8 load_file
         __free_parse_tree_nodes( __parse_tree->top );
     }
 
-    memset( out_fname, 0, sizeof( out_fname ) / sizeof( *out_fname ) );
-    cur_char = filename;
-    cur_out_char = out_fname;
-    while( ( '.' != *cur_char ) && ( '\0' != *cur_char ) )
-    {
-        *(cur_out_char++) = *(cur_char++);
-    }
-    *cur_out_char = '\0';
-    strcat( out_fname, FORTH_EXTENSION );
-    //__cur_out_file = fopen( out_fname, "w" );
-    //if( NULL == __cur_out_file )
-    //{
-    //    return( PARSER_LOAD_ERROR );
-    //}
-
+    /*---------------------------------
+    Update our state, initialize some
+    other globals, and then return
+    ---------------------------------*/
     __parser_state = PARSER_PARSE_FILE;
     __end_reached  = FALSE;
 
+    /*---------------------------------
+    Pre-load the first token
+    ---------------------------------*/
     __get_next_token( NULL );
 
     return( PARSER_NO_ERROR );
@@ -1961,18 +2964,52 @@ parser_error_t8 load_file
 }   /* load_file() */
 
 
+/**************************************************
+*
+*   FUNCTION:
+*       parse_file - "Parse File"
+*
+*   DESCRIPTION:
+*       Parses the currently loaded file
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there
+*         were no errors
+*       - Returns PARSER_UNEXPECTED_TOKEN
+*         if the file didn't conform to
+*         the grammar of the language
+*       - Returns PARSER_PARSE_ERROR if
+*         there was an unspecified error
+*       - Returns PARSER_MISMATCHED_LIST if
+*         "[" and "]" are mismatched.
+*
+**************************************************/
 parser_error_t8 parse_file
 (
     void
 )
 {
-    parser_error_t8 err_code;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    parser_error_t8     err_code;   /* error code       */
 
+    /*---------------------------------
+    Check if we are in the correct
+    state
+    ---------------------------------*/
     if( PARSER_PARSE_FILE != __parser_state )
     {
         return( PARSER_PARSE_ERROR );
     }
 
+    /*---------------------------------
+    Add a blank node to the top
+    of the tree
+    ---------------------------------*/
     __parse_tree->top = __create_node();
     __parse_tree->top->first_child = NULL;
     __parse_tree->top->last_child  = NULL;
@@ -1980,8 +3017,18 @@ parser_error_t8 parse_file
     memset( &( __parse_tree->top->tok ), 0, sizeof( __parse_tree->top->tok ) );
     __parse_tree->top->tok.tok_class = TOK_NO_CLASS;
 
+    /*---------------------------------
+    Perform the recursive decent
+    algorithm on the file's program
+    ---------------------------------*/
     err_code = __T( __parse_tree->top );
 
+    /*---------------------------------
+    If we are finished reading the file
+    and there were no errors, then
+    print the parse tree. Otherwise,
+    print the error
+    ---------------------------------*/
     if( ( PARSER_NO_ERROR == err_code ) && ( __end_reached ) )
     {
         __print_tree( __parse_tree->top, 0 );
@@ -1991,47 +3038,104 @@ parser_error_t8 parse_file
         __print_error( err_code );
     }
 
-    //__free_parse_tree_nodes( __parse_tree->top );
-    //__parse_tree->top = NULL;
+    /*---------------------------------
+    Update the parser state
+    ---------------------------------*/
     __parser_state = PARSER_GEN_CODE;
 
+    /*---------------------------------
+    Return the error code if there were
+    no errors or if we reached the
+    end of the file (and there were
+    errors)
+    ---------------------------------*/
     if( __end_reached || ( PARSER_NO_ERROR != err_code ) )
     {
         return( err_code );
     }
 
-    //gen_code( __parse_tree->top );
-
+    /*---------------------------------
+    Print an error and return
+    ---------------------------------*/
     __print_error( PARSER_PARSE_ERROR );
     return( PARSER_PARSE_ERROR );
 
 }   /* parse_file() */
 
 
+/**************************************************
+*
+*   FUNCTION:
+*       unload_file - "Unload File"
+*
+*   DESCRIPTION:
+*       Unloads the current input file so
+*       that a new file can be parsed
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there were
+*         no errors
+*
+**************************************************/
 parser_error_t8 unload_file
 (
     void
 )
 {
+    /*---------------------------------
+    Tell the scanner to unload the
+    file
+    ---------------------------------*/
     unload_scanner_file();
 
+    /*---------------------------------
+    Free the parse tree and set
+    the state so that we can't parse
+    stuff without loading another
+    file
+    ---------------------------------*/
     __free_parse_tree();
     __parser_state = PARSER_LOAD_FILE;
-
-    //fclose( __cur_out_file );
-    __cur_out_file = NULL;
 
     return( PARSER_NO_ERROR );
 
 }   /* unload_file() */
 
+
+/**************************************************
+*
+*   FUNCTION:
+*       unload_parser - "Unload Parser"
+*
+*   DESCRIPTION:
+*       Unloads the parser
+*
+*   RETURNS:
+*       Returns an error code
+*
+*   ERRORS:
+*       - Returns PARSER_NO_ERROR if there were
+*         no errors
+*
+**************************************************/
 parser_error_t8 unload_parser
 (
     void
 )
 {
+    /*---------------------------------
+    Unload the scanner
+    ---------------------------------*/
     unload_scanner();
 
+    /*---------------------------------
+    Free the parse tree and set the
+    state so that the parser cannot
+    be used without a re-initialization
+    ---------------------------------*/
     __free_parse_tree();
     __parser_state = PARSER_INIT;
 

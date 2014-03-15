@@ -1,41 +1,70 @@
-/***************************************************************************************//**
- *
- *  MODULE NAME:
- *      [ filename ] - [ short description ]
- *
- *  DESCRIPTION:
- *      [ description of file's usability ]
- *
- *  \author Aidan Lance
- *  \date   [ date ]
- *
- ******************************************************************************************/
+/**************************************************
+*
+*   MODULE NAME:
+*       main.c
+*
+*   DESCRIPTION:
+*       I don't think I need on for this file
+*
+**************************************************/
 
-/*------------------------------------------------------------------------------------------
-                                     GENERAL INCLUDES
-------------------------------------------------------------------------------------------*/
+/*-------------------------------------------------
+                  GENERAL INCLUDES
+-------------------------------------------------*/
 #include <stdio.h>
+
 #include "parser.h"
 #include "code_gen.h"
 
-/*------------------------------------------------------------------------------------------
-                                     LITERAL CONSTANTS
-------------------------------------------------------------------------------------------*/
-#define FILENAME_IDX 1
-#define NUM_TESTS_PASS 47
-#define NUM_TESTS_FAIL 29
-//#define __CODEBLOCKS_TEST
+/*-------------------------------------------------
+                LITERAL CONSTANTS
+-------------------------------------------------*/
 
-/*------------------------------------------------------------------------------------------
-                                      PROCEDURES
-------------------------------------------------------------------------------------------*/
-int main( int argc, char **argv )
+#define FILENAME_IDX   1    /* index for filenames to start     */
+#define NUM_TESTS_PASS 51   /* number of tests that should pass */
+#define NUM_TESTS_FAIL 31   /* number of tests that should fail */
+
+#define __CODEBLOCKS_TEST
+
+/*-------------------------------------------------
+                    PROCEDURES
+-------------------------------------------------*/
+
+/**************************************************
+*
+*   FUNCTION:
+*       main - "Main"
+*
+*   DESCRIPTION:
+*       The main function that does everything.
+*       I really don't think that I need this.
+*
+**************************************************/
+int main
+(
+    int     argc,   /* number of command line arguments */
+    char  **argv    /* the command line arguments       */
+)
 {
-    int grr, i;
+    /*---------------------------------
+    Local variables
+    ---------------------------------*/
+    int     grr;        /* for-loop iterator        */
+    int     i;          /* pronounced "eye"         */
+    char    fname[50];  /* filename                 */
+
+    /*---------------------------------
+    Initialize the parser
+    ---------------------------------*/
     init_parser();
-    char fname[50];
 
 #ifdef __CODEBLOCKS_TEST
+    /*---------------------------------
+    Loop through all passing tests
+    and create the Gforth code files
+    only if the parser can parse the
+    file.
+    ---------------------------------*/
     for( i = 0; i < NUM_TESTS_PASS; ++i )
     {
         sprintf( fname, "test%i.txt", i + 1 );
@@ -54,6 +83,10 @@ int main( int argc, char **argv )
         unload_file();
     }
 
+    /*---------------------------------
+    Loop through all failing tests
+    and make sure that they fail
+    ---------------------------------*/
     for( i = 0; i < NUM_TESTS_FAIL; ++i )
     {
         sprintf( fname, "test_fail%i.txt", i + 1 );
@@ -74,6 +107,11 @@ int main( int argc, char **argv )
 #else
     if( argc > 1 )
     {
+        /*-----------------------------
+        Loop through all files supplied
+        to the program and create the
+        code files for each program
+        -----------------------------*/
         for( grr = 1; grr < argc; ++grr )
         {
             if( '-' != *argv[grr] )
@@ -116,6 +154,9 @@ int main( int argc, char **argv )
     scanf("%i", &grr);
 #endif
 
+    /*---------------------------------
+    Unload the parser
+    ---------------------------------*/
     unload_parser();
     return( 0 );
 
